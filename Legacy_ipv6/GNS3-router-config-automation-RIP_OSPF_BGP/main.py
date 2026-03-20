@@ -19,7 +19,7 @@ from gen_config_bgp_ospf.bgp_ospf_gen import generate_bgp_configs as gen_ospf
 from injection_cfgs.injection_cfgs import injection_cfg
 
 
-def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", advanced_options={}):
+def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_strategy="grand_reseaux", advanced_options={}):
     """
     Exécute la logique d'automatisation avec les paramètres fournis.
     """
@@ -46,7 +46,8 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", advanced
         ip_base=ip_prefix, 
         output_dir=ROOT_DIR, 
         output_name="topology.json",
-        loopback_format=loopback_format
+        loopback_format=loopback_format,
+        routing_strategy=routing_strategy
     )
     
     if topo_data is None:
@@ -212,6 +213,7 @@ def main_gui():
     def submit_config():
         config_results["ip_base"] = entry_ip.get()
         config_results["loopback_fmt"] = var_loopback.get()
+        config_results["routing_strategy"] = var_strategy.get()
         config_results["enable_policies"] = var_policies.get()
         config_results["enable_metrics"] = var_metrics.get()
         config_results["secure_redist"] = var_redist.get()
@@ -233,6 +235,11 @@ def main_gui():
     entry_ip.insert(0, "10.0.0.0/8")
     entry_ip.pack(fill="x", pady=5)
     
+    ttk.Label(lf_addr, text="Stratégie IP Intra-AS :").pack(anchor="w", pady=(10, 0))
+    var_strategy = tk.StringVar(value="grand_reseaux")
+    ttk.Radiobutton(lf_addr, text="Grand Réseaux (10.AS.Lien.X)", variable=var_strategy, value="grand_reseaux").pack(anchor="w")
+    ttk.Radiobutton(lf_addr, text="Simple (10.AS.Routeur.Interface)", variable=var_strategy, value="simple").pack(anchor="w")
+
     ttk.Label(lf_addr, text="Format des adresses Loopback :").pack(anchor="w", pady=(10, 0))
     var_loopback = tk.StringVar(value="with_as")
     ttk.Radiobutton(lf_addr, text="Avec AS (10.255.<AS>.<ID>)", variable=var_loopback, value="with_as").pack(anchor="w")
@@ -542,9 +549,10 @@ def main_gui():
     # Extraction des valeurs
     ip_base = config_results.get("ip_base", "10.0.0.0/8")
     loopback_choice = config_results.get("loopback_fmt", "simple")
+    routing_strategy = config_results.get("routing_strategy", "grand_reseaux")
 
     # 3. Lancer le traitement
-    print(f"Options choisies : Policies={config_results['enable_policies']}, Metrics={config_results['enable_metrics']}, Redist={config_results['secure_redist']}")
+    print(f"Options choisies : Policies={config_results['enable_policies']}, Metrics={config_results['enable_metrics']}, Redist={config_results['secure_redist']}, Stratégie={routing_strategy}")
     
     # Construction du dictionnaire d'options
     advanced_options = {
@@ -554,7 +562,7 @@ def main_gui():
         "ospf_costs": config_results.get("ospf_costs", {})
     }
     
-    success, message = run_automation(file_path, ip_base, loopback_choice, advanced_options)
+    success, message = run_automation(file_path, ip_base, loopback_choice, routing_strategy, advanced_options)
     
     if success:
         messagebox.showinfo("Terminé", message)

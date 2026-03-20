@@ -34,11 +34,11 @@ def extract_drawings(gns3_data):
     """
     Extrait les rectangles de dessins du projet GNS3.
     Retourne une liste de dictionnaires avec: x, y, width, height, color, protocol, as_number
-    Assigne les numéros d'AS croissants: 100, 200, 300...
+    Assigne les numéros d'AS croissants: 1, 2, 3...
     """
     drawings = gns3_data.get("topology", {}).get("drawings", [])
     rectangles = []
-    as_counter = 100
+    as_counter = 1
     
     for drawing in drawings:
         svg = drawing.get("svg", "")
@@ -70,7 +70,7 @@ def extract_drawings(gns3_data):
             }
             
             rect["as_number"] = as_counter
-            as_counter += 100
+            as_counter += 1
 
             rectangles.append(rect)
     
@@ -133,7 +133,7 @@ def assign_routers_to_as(nodes_data, rectangles):
 
 
 # --- FONCTION PRINCIPALE ---
-def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="topology.json", loopback_format="simple"):
+def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="topology.json", loopback_format="simple", routing_strategy="grand_reseaux"):
     """
     Extrait la topologie d'un fichier .gns3 et génère un fichier topology.json
     
@@ -142,6 +142,8 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
         ip_base (str): Base pour l'adressage ip (défaut: "10.0.0.0/8")
         output_dir (str): Répertoire de sortie (défaut: répertoire du script)
         output_name (str): Nom du fichier de sortie (défaut: "topology.json")
+        loopback_format (str): Format des loopbacks
+        routing_strategy (str): Stratégie d'adressage IP ("grand_reseaux" ou "simple")
     
     Returns:
         dict: Les données de topologie extraites
@@ -257,6 +259,10 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
     intra_as_link_counters = defaultdict(int)
     inter_as_link_counters = defaultdict(int)
 
+    def parse_iface_id(iface_name):
+        nums = re.findall(r'\d+', iface_name)
+        return int(nums[0]) if nums else 1
+
     # 3a. IDs
     node_to_id = {}
     for name in routers_list:
@@ -280,24 +286,35 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
 
         if as_a == as_b and as_a != 0:
             # Cas 1 : Intra-AS (Même AS et AS != 0)
-            # Format attendu : 10.AS.link_id.X/24
             
             as_octet = as_a % 255 if as_a > 255 else as_a
             
-            # Use deterministic unique subnet per link
-            # We can use low_id and high_id, for example: LowID * 10 + HighID
-            # To avoid clashes if values are big, we use the counter approach per AS
-            intra_as_link_counters[as_octet] += 1
-            link_id = intra_as_link_counters[as_octet]
-            
-            # Avoid using .0 or .255 for link_id if it gets big, but assume < 254
-            link_sub = (link_id % 254) + 1 
-            
-            subnet_prefix = f"{base_first_octet}.{as_octet}.{link_sub}.0"
-            subnet_cidr = f"{subnet_prefix}/24"
-            
-            ip_a_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_a_int}"
-            ip_b_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_b_int}"
+            if routing_strategy == "grand_reseaux":
+                # Use deterministic unique subnet per link
+                # We can use low_id and high_id, for example: LowID * 10 + HighID
+                # To avoid clashes if values are big, we use the counter approach per AS
+                intra_as_link_counters[as_octet] += 1
+                link_id = intra_as_link_counters[as_octet]
+                
+                # Avoid using .0 or .255 for link_id if it gets big, but assume < 254
+                link_sub = (link_id % 254) + 1 
+                
+                subnet_prefix = f"{base_first_octet}.{as_octet}.{link_sub}.0"
+                subnet_cidr = f"{subnet_prefix}/24"
+                
+                ip_a_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_a_int}"
+                ip_b_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_b_int}"
+            elif routing_strategy == "simple":
+                iface_a_id = parse_iface_id(a_iface_name)
+                iface_b_id = parse_iface_id(b_iface_name)
+                
+                ip_a_str = f"10.{as_octet}.{id_a_int}.{iface_a_id}"
+                ip_b_str = f"10.{as_octet}.{id_b_int}.{iface_b_id}"
+                
+                # Le vrai masque est /24 mais on assigne selon l'interface pour le 'simple'
+                subnet_prefix = f"10.{as_octet}.0.0"
+                subnet_cidr = f"{subnet_prefix}/24"
+
             prefix_len = 24
 
         else:
