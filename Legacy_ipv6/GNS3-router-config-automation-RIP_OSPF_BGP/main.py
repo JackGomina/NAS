@@ -538,7 +538,7 @@ def main_gui():
 
     # Extraction des valeurs
     ip_base = "10.0.0.0/8"
-    loopback_choice = "simple"
+    loopback_choice = "with_as"
     routing_strategy = config_results.get("routing_strategy", "grand_reseaux")
 
     # 3. Lancer le traitement

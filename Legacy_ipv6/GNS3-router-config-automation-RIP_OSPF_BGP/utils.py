@@ -33,29 +33,20 @@ def get_router_id(router_name):
         
     return f"{num}.{num}.{num}.{num}"
 
-def get_loopback_ip(router_name, fmt="simple", as_number=None):
+def get_loopback_ip(router_name, as_number=None, **kwargs):
     """
-    Generates an IP Loopback address based on the selected format.
-    Formats:
-      - 'simple': 1.1.1.1 (same as router ID)
-      - 'with_as': 10.255.AS.ID
+    Generates an IP Loopback address.
+    Format: 10.255.AS.ID
     """
     num = get_router_number(router_name)
     
-    if fmt == "simple":
-        return get_router_id(router_name)
-    
-    elif fmt == "with_as":
-        # Format: 10.255.AS.ID
-        if as_number:
-            try:
-                numeric_as = int(as_number)
-                if numeric_as > 255:
-                    numeric_as = numeric_as % 255
-                return f"10.255.{numeric_as}.{num}"
-            except ValueError:
-                return f"10.255.255.{num}" # Fallback
-        else:
-            return f"10.255.255.{num}"
-    
-    return get_router_id(router_name)
+    if as_number:
+        try:
+            numeric_as = int(as_number)
+            if numeric_as > 255:
+                numeric_as = numeric_as % 255
+            return f"10.255.{numeric_as}.{num}"
+        except ValueError:
+            return f"10.255.255.{num}" # Fallback
+    else:
+        return f"10.255.255.{num}"
