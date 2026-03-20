@@ -290,20 +290,18 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
             as_octet = as_a % 255 if as_a > 255 else as_a
             
             if routing_strategy == "grand_reseaux":
-                # Use deterministic unique subnet per link
-                # We can use low_id and high_id, for example: LowID * 10 + HighID
-                # To avoid clashes if values are big, we use the counter approach per AS
                 intra_as_link_counters[as_octet] += 1
                 link_id = intra_as_link_counters[as_octet]
                 
-                # Avoid using .0 or .255 for link_id if it gets big, but assume < 254
+                # Le 3ème octet incrémente à chaque nouveau lien (jusqu'à 254 liens par AS)
                 link_sub = (link_id % 254) + 1 
                 
                 subnet_prefix = f"{base_first_octet}.{as_octet}.{link_sub}.0"
                 subnet_cidr = f"{subnet_prefix}/24"
                 
-                ip_a_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_a_int}"
-                ip_b_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_b_int}"
+                # Attribue toujours .1 et .2 pour les deux interfaces de ce lien
+                ip_a_str = f"{base_first_octet}.{as_octet}.{link_sub}.1"
+                ip_b_str = f"{base_first_octet}.{as_octet}.{link_sub}.2"
             elif routing_strategy == "simple":
                 iface_a_id = parse_iface_id(a_iface_name)
                 iface_b_id = parse_iface_id(b_iface_name)

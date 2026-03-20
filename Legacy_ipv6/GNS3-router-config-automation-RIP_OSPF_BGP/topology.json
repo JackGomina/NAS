@@ -1,0 +1,102 @@
+{
+  "ip_base": "10.0.0.0/8",
+  "loopback_format": "simple",
+  "routers": [
+    {
+      "name": "R1",
+      "protocol": "UNKNOWN",
+      "as_number": null,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "192.168.2.1",
+          "prefix": 24
+        }
+      ],
+      "networks": [
+        "192.168.2.0/24"
+      ]
+    },
+    {
+      "name": "R2",
+      "protocol": "UNKNOWN",
+      "as_number": null,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "192.168.2.2",
+          "prefix": 24
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "192.168.3.2",
+          "prefix": 24
+        }
+      ],
+      "networks": [
+        "192.168.2.0/24",
+        "192.168.3.0/24"
+      ]
+    },
+    {
+      "name": "R4",
+      "protocol": "UNKNOWN",
+      "as_number": null,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "192.168.4.4",
+          "prefix": 24
+        }
+      ],
+      "networks": [
+        "192.168.4.0/24"
+      ]
+    },
+    {
+      "name": "R3",
+      "protocol": "UNKNOWN",
+      "as_number": null,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "192.168.3.3",
+          "prefix": 24
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "192.168.4.3",
+          "prefix": 24
+        }
+      ],
+      "networks": [
+        "192.168.3.0/24",
+        "192.168.4.0/24"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "a": "R1",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R2",
+      "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "R3",
+      "a_iface": "GigabitEthernet2/0",
+      "b": "R2",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "R4",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R3",
+      "b_iface": "GigabitEthernet1/0"
+    }
+  ]
+}
