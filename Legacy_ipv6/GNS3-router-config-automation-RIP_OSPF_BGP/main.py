@@ -211,8 +211,6 @@ def main_gui():
     config_results = {}
     
     def submit_config():
-        config_results["ip_base"] = entry_ip.get()
-        config_results["loopback_fmt"] = var_loopback.get()
         config_results["routing_strategy"] = var_strategy.get()
         config_results["enable_policies"] = var_policies.get()
         config_results["enable_metrics"] = var_metrics.get()
@@ -230,20 +228,12 @@ def main_gui():
     lf_addr = ttk.LabelFrame(config_win, text="1. Adressage ip", padding=10)
     lf_addr.pack(fill="x", padx=10, pady=10)
     
-    ttk.Label(lf_addr, text="Préfixe des adresses physiques (ex: 10.0.0.0/8)\n Format prévu intra-AS : 10.<AS>.<L>.0/24\n Format prévu inter-AS : 192.168.<L>.0/24").pack(anchor="w")
-    entry_ip = ttk.Entry(lf_addr)
-    entry_ip.insert(0, "10.0.0.0/8")
-    entry_ip.pack(fill="x", pady=5)
+    ttk.Label(lf_addr, text="Format prévu intra-AS : 10.<AS>.X.X\nFormat prévu inter-AS : 192.168.L.X").pack(anchor="w")
     
     ttk.Label(lf_addr, text="Stratégie IP Intra-AS :").pack(anchor="w", pady=(10, 0))
     var_strategy = tk.StringVar(value="grand_reseaux")
     ttk.Radiobutton(lf_addr, text="Grand Réseaux (10.AS.Lien.X)", variable=var_strategy, value="grand_reseaux").pack(anchor="w")
     ttk.Radiobutton(lf_addr, text="Simple (10.AS.Routeur.Interface)", variable=var_strategy, value="simple").pack(anchor="w")
-
-    ttk.Label(lf_addr, text="Format des adresses Loopback :").pack(anchor="w", pady=(10, 0))
-    var_loopback = tk.StringVar(value="with_as")
-    ttk.Radiobutton(lf_addr, text="Avec AS (10.255.<AS>.<ID>)", variable=var_loopback, value="with_as").pack(anchor="w")
-    ttk.Radiobutton(lf_addr, text="Simple (<ID>.<ID>.<ID>.<ID>)", variable=var_loopback, value="simple").pack(anchor="w")
 
     # Section 2: Options Avancées (Policies)
     lf_advanced = ttk.LabelFrame(config_win, text="2. Options Avancées", padding=10)
@@ -547,8 +537,8 @@ def main_gui():
         return
 
     # Extraction des valeurs
-    ip_base = config_results.get("ip_base", "10.0.0.0/8")
-    loopback_choice = config_results.get("loopback_fmt", "simple")
+    ip_base = "10.0.0.0/8"
+    loopback_choice = "simple"
     routing_strategy = config_results.get("routing_strategy", "grand_reseaux")
 
     # 3. Lancer le traitement

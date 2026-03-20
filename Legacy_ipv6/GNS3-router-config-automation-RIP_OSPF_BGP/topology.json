@@ -11,7 +11,8 @@
         {
           "name": "GigabitEthernet1/0",
           "ip": "192.168.2.1",
-          "prefix": 24
+          "prefix": 24,
+          "mask": "255.255.255.0"
         }
       ],
       "networks": [
@@ -27,12 +28,14 @@
         {
           "name": "GigabitEthernet1/0",
           "ip": "192.168.2.2",
-          "prefix": 24
+          "prefix": 24,
+          "mask": "255.255.255.0"
         },
         {
           "name": "GigabitEthernet2/0",
           "ip": "192.168.3.2",
-          "prefix": 24
+          "prefix": 24,
+          "mask": "255.255.255.0"
         }
       ],
       "networks": [
@@ -49,7 +52,8 @@
         {
           "name": "GigabitEthernet1/0",
           "ip": "192.168.4.4",
-          "prefix": 24
+          "prefix": 24,
+          "mask": "255.255.255.0"
         }
       ],
       "networks": [
@@ -65,12 +69,14 @@
         {
           "name": "GigabitEthernet2/0",
           "ip": "192.168.3.3",
-          "prefix": 24
+          "prefix": 24,
+          "mask": "255.255.255.0"
         },
         {
           "name": "GigabitEthernet1/0",
           "ip": "192.168.4.3",
-          "prefix": 24
+          "prefix": 24,
+          "mask": "255.255.255.0"
         }
       ],
       "networks": [

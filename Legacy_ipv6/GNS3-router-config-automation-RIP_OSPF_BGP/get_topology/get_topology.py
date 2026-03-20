@@ -291,17 +291,24 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
             
             if routing_strategy == "grand_reseaux":
                 intra_as_link_counters[as_octet] += 1
-                link_id = intra_as_link_counters[as_octet]
+                # On commence à 0 pour le premier lien
+                link_id_0 = intra_as_link_counters[as_octet] - 1
                 
-                # Le 3ème octet incrémente à chaque nouveau lien (jusqu'à 254 liens par AS)
-                link_sub = (link_id % 254) + 1 
+                # 1 lien = 1 sous réseau /30 (4 IP, donc intervalle de 4)
+                subnet_int = link_id_0 * 4
+                octet3 = subnet_int // 256
+                octet4 = subnet_int % 256
                 
-                subnet_prefix = f"{base_first_octet}.{as_octet}.{link_sub}.0"
-                subnet_cidr = f"{subnet_prefix}/24"
+                ip_a_val = subnet_int + 1
+                ip_b_val = subnet_int + 2
                 
-                # Attribue toujours .1 et .2 pour les deux interfaces de ce lien
-                ip_a_str = f"{base_first_octet}.{as_octet}.{link_sub}.1"
-                ip_b_str = f"{base_first_octet}.{as_octet}.{link_sub}.2"
+                subnet_prefix = f"10.{as_octet}.{octet3}.{octet4}"
+                subnet_cidr = f"{subnet_prefix}/30"
+                
+                ip_a_str = f"10.{as_octet}.{ip_a_val // 256}.{ip_a_val % 256}"
+                ip_b_str = f"10.{as_octet}.{ip_b_val // 256}.{ip_b_val % 256}"
+                prefix_len = 30
+                mask_str = "255.255.255.252"
             elif routing_strategy == "simple":
                 iface_a_id = parse_iface_id(a_iface_name)
                 iface_b_id = parse_iface_id(b_iface_name)
@@ -313,7 +320,9 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
                 subnet_prefix = f"10.{as_octet}.0.0"
                 subnet_cidr = f"{subnet_prefix}/24"
 
-            prefix_len = 24
+            prefix_len = 24 if routing_strategy == "simple" else 30
+            if routing_strategy == "simple":
+                mask_str = "255.255.255.0"
 
         else:
             # Cas 2 : Inter-AS (eBGP ou lien non assigné)
@@ -340,12 +349,14 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
             ip_a_str = f"192.168.{third_octet}.{id_a_int}"
             ip_b_str = f"192.168.{third_octet}.{id_b_int}"
             prefix_len = 24
+            mask_str = "255.255.255.0"
 
         # Configuration pour le routeur A
         interfaces_cfg[a].append({
             "name": a_iface_name,
             "ip": ip_a_str,
-            "prefix": prefix_len
+            "prefix": prefix_len,
+            "mask": mask_str
         })
         networks[a].add(subnet_cidr)
 
@@ -353,7 +364,8 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
         interfaces_cfg[b].append({
             "name": b_iface_name,
             "ip": ip_b_str,
-            "prefix": prefix_len
+            "prefix": prefix_len,
+            "mask": mask_str
         })
         networks[b].add(subnet_cidr)
 

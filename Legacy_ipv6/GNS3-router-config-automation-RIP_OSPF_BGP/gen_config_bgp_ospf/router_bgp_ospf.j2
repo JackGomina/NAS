@@ -11,7 +11,7 @@ interface Loopback0
 {% for iface in interfaces %}
 interface {{ iface.name }}
  no ip address
- ip address {{ iface.ip }} 255.255.255.0
+ ip address {{ iface.ip }} {{ iface.mask }}
  {% if iface.ospf_enabled %}
  ip ospf 1 area 0
  {% if iface.ospf_cost %}
