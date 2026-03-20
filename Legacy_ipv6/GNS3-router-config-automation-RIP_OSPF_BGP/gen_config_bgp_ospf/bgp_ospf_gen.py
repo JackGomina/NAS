@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IPv6 BGP Config Generator (Unified iBGP/eBGP)
+ip BGP Config Generator (Unified iBGP/eBGP)
 """
 import json
 import os

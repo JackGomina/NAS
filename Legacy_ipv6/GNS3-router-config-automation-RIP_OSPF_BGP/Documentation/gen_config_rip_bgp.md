@@ -31,7 +31,7 @@ Rappel Jinja2 :
 Variables principales injectées par le générateur :
 - `router_name` : nom du routeur (ex: R6)
 - `router_id` : BGP router-id (format IPv4), ex `6.6.6.6`
-- `loopback_ip` : IPv6 loopback (souvent `/128`), ex `2000::6`
+- `loopback_ip` : ip loopback (souvent `/128`), ex `2000::6`
 - `asn` : ASN du routeur
 - `interfaces[]` : interfaces avec `name`, `ip`, `prefix` et `rip_enabled`
 - `neighbors[]` : voisins BGP avec `ip`, `asn`, `name`, `is_ibgp`, `relationship`
@@ -39,39 +39,39 @@ Variables principales injectées par le générateur :
 - `is_border` : vrai si le routeur a au moins un voisin eBGP
 - `options` : options (`policies_enabled`, `secure_redist`, `bgp_relations`)
 
-## 1) Identité et activation IPv6
+## 1) Identité et activation ip
 ```text
 hostname {{ router_name }}
-ipv6 unicast-routing
-ipv6 cef
+ip unicast-routing
+ip cef
 ```
 - `hostname ...` : facilite l’identification du routeur.
-- `ipv6 unicast-routing` : active le routage IPv6 globalement (sinon pas de forwarding IPv6).
-- `ipv6 cef` : active CEF (forwarding plus performant/stable en lab).
+- `ip unicast-routing` : active le routage ip globalement (sinon pas de forwarding ip).
+- `ip cef` : active CEF (forwarding plus performant/stable en lab).
 
 ## 2) Loopback0 (identité stable + support iBGP)
 ```text
 interface Loopback0
- ipv6 address {{ loopback_ip }}/128
- ipv6 rip RIPNG enable
+ ip address {{ loopback_ip }}/128
+ ip rip RIPNG enable
 ```
 - `Loopback0` : interface logique (reste UP tant que le routeur est UP).
-- `ipv6 address .../128` : adresse “identité” du routeur (host route).
-- `ipv6 rip RIPNG enable` : annonce la loopback via RIPng → indispensable pour que les loopbacks soient joignables (utile pour l’iBGP par loopback).
+- `ip address .../128` : adresse “identité” du routeur (host route).
+- `ip rip RIPNG enable` : annonce la loopback via RIPng → indispensable pour que les loopbacks soient joignables (utile pour l’iBGP par loopback).
 
 ## 3) Interfaces physiques (boucle Jinja2)
 ```text
 {% for iface in interfaces %}
 interface {{ iface.name }}
- ipv6 address {{ iface.ip }}/{{ iface.prefix }}
+ ip address {{ iface.ip }}/{{ iface.prefix }}
  {% if iface.rip_enabled %}
- ipv6 rip RIPNG enable
+ ip rip RIPNG enable
  {% endif %}
  no shutdown
 {% endfor %}
 ```
 - La boucle `for` génère un bloc par interface décrite dans le JSON.
-- `ipv6 address ...` : configure l’IPv6 sur le lien.
+- `ip address ...` : configure l’ip sur le lien.
 - `iface.rip_enabled` : contrôlé par Python.
     - `True` : RIPng est activé sur l’interface.
     - `False` : RIPng n’est pas activé (typiquement sur un lien eBGP inter-AS pour éviter RIP entre AS).
@@ -79,12 +79,12 @@ interface {{ iface.name }}
 
 ## 4) RIPng global + injection de route par défaut si bordure
 ```text
-ipv6 router rip RIPNG
+ip router rip RIPNG
  {% if is_border %}
- ipv6 rip RIPNG default-information originate
+ ip rip RIPNG default-information originate
  {% endif %}
 ```
-- `ipv6 router rip RIPNG` : crée/active le processus RIPng.
+- `ip router rip RIPNG` : crée/active le processus RIPng.
 - Si `is_border` : le routeur injecte `::/0` dans RIPng.
     - But : les routeurs internes n’apprennent pas toute la table externe; ils envoient l’externe vers la bordure via une route par défaut.
 
@@ -95,8 +95,8 @@ router bgp {{ asn }}
  no bgp default ipv4-unicast
 ```
 - `router bgp <asn>` : démarre BGP dans l’AS.
-- `bgp router-id <router_id>` : identifiant BGP (format IPv4), même si on fait IPv6.
-- `no bgp default ipv4-unicast` : évite de gérer IPv4; on utilisera uniquement l’address-family IPv6.
+- `bgp router-id <router_id>` : identifiant BGP (format IPv4), même si on fait ip.
+- `no bgp default ipv4-unicast` : évite de gérer IPv4; on utilisera uniquement l’address-family ip.
 
 ## 6) Voisins BGP
 ```text
@@ -135,9 +135,9 @@ Topologie: R1 — R2 — R3, avec R1 et R2 dans le même AS (ex: AS100) et R3 da
 
 En résumé: R2, en tant que routeur de bordure, apprend l’externe depuis R3, **réécrit le next-hop** vers lui-même pour les pairs iBGP, et fournit une route par défaut aux internes. R1 parle iBGP avec R2 via loopback, apprend l’externe avec un next-hop atteignable (Loopback de R2) et envoie son trafic externe vers R2.
 
-## 7) Address-family IPv6 unicast (activation + policies optionnelles)
+## 7) Address-family ip unicast (activation + policies optionnelles)
 ```text
-address-family ipv6 unicast
+address-family ip unicast
  {% for neighbor in neighbors %}
     neighbor {{ neighbor.ip }} activate
     {% if options.policies_enabled %}
@@ -149,7 +149,7 @@ address-family ipv6 unicast
     {% endif %}
  {% endfor %}
 ```
-- `neighbor ... activate` : active ce voisin pour l’IPv6.
+- `neighbor ... activate` : active ce voisin pour l’ip.
 - `send-community` : autorise l’envoi des “tags” BGP (communities) au voisin.
     - Ces tags sont utilisés par les politiques (ex: marquer une route comme venant d’un customer).
 - Route-maps **seulement en eBGP** (`not neighbor.is_ibgp`) : on évite d’appliquer ces politiques sur iBGP.

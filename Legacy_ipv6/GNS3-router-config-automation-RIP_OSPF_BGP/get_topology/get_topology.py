@@ -134,13 +134,13 @@ def assign_routers_to_as(nodes_data, rectangles):
 
 
 # --- FONCTION PRINCIPALE ---
-def get_topology(gns3_file, ip_base="2000:1::/64", output_dir=None, output_name="topology.json", loopback_format="simple"):
+def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="topology.json", loopback_format="simple"):
     """
     Extrait la topologie d'un fichier .gns3 et génère un fichier topology.json
     
     Args:
         gns3_file (str): Chemin vers le fichier .gns3
-        ip_base (str): Base pour l'adressage IPv6 (défaut: "2000:1::/64")
+        ip_base (str): Base pour l'adressage ip (défaut: "10.0.0.0/8")
         output_dir (str): Répertoire de sortie (défaut: répertoire du script)
         output_name (str): Nom du fichier de sortie (défaut: "topology.json")
     
@@ -240,13 +240,23 @@ def get_topology(gns3_file, ip_base="2000:1::/64", output_dir=None, output_name=
             router_to_as[b] = b_info
 
     # --- 3. LOGIQUE D'ADRESSAGE MNÉMOTECHNIQUE AVEC AS ---
-    # format: 2000:1:<AS>:<ID1>:<ID2>::<ID_LOCAL>
+    # IPv4 addressing: 
+    # Intra-AS: base.{AS}.{link_id}.{ID_LOCAL}/24
+    # Inter-AS: 192.168.{AS_MIN}.{AS_MAX}/24 (last octet is router ID)
     
-    base_net_obj = ipaddress.ip_network(ip_base, strict=False)
-    base_parts = str(base_net_obj.network_address).split('::')[0]
+    # Optional parsing of base IP, but we primarily use it for the first octet of Intra-AS
+    try:
+        base_net_obj = ipaddress.IPv4Network(ip_base, strict=False)
+        base_first_octet = str(base_net_obj.network_address).split('.')[0]
+    except Exception:
+        base_first_octet = "10"
     
     interfaces_cfg = defaultdict(list)
     networks = defaultdict(set)
+
+    # Counters to generate unique subnets
+    intra_as_link_counters = defaultdict(int)
+    inter_as_link_counters = defaultdict(int)
 
     # 3a. IDs
     node_to_id = {}
@@ -267,55 +277,55 @@ def get_topology(gns3_file, ip_base="2000:1::/64", output_dir=None, output_name=
         as_a = int(info_a['as_number']) if info_a and info_a.get('as_number') else 0
         as_b = int(info_b['as_number']) if info_b and info_b.get('as_number') else 0
 
+        low_id, high_id = sorted((id_a_int, id_b_int))
+
         if as_a == as_b and as_a != 0:
             # Cas 1 : Intra-AS (Même AS et AS != 0)
-            # Format attendu : 2000:1:AS:ID1:ID2::X/80
-            # 2000:1::/64 -> base_parts = "2000:1"
-            # base_parts (2 blocs) + AS (1 bloc) + ID1 (1 bloc) + ID2 (1 bloc) = 5 blocs
-            # Reste 3 blocs pour l'hôte.
-            low_id, high_id = sorted((id_a_int, id_b_int))
-            # Construction propre sans double "::"
-            subnet_prefix_str = f"{base_parts}:{as_a}:{low_id}:{high_id}::"
-            subnet_prefix_no_colons = f"{base_parts}:{as_a}:{low_id}:{high_id}:0:0:0"
-            subnet_cidr = f"{subnet_prefix_str}/80"
+            # Format attendu : 10.AS.link_id.X/24
             
-            # On utilise ipaddress pour faire l'addition propre
-            net = ipaddress.IPv6Network(f"{base_parts}:{as_a}:{low_id}:{high_id}::/80", strict=False)
-            ip_a_str = str(net.network_address + id_a_int)
-            ip_b_str = str(net.network_address + id_b_int)
-            prefix_len = 80
+            as_octet = as_a % 255 if as_a > 255 else as_a
+            
+            # Use deterministic unique subnet per link
+            # We can use low_id and high_id, for example: LowID * 10 + HighID
+            # To avoid clashes if values are big, we use the counter approach per AS
+            intra_as_link_counters[as_octet] += 1
+            link_id = intra_as_link_counters[as_octet]
+            
+            # Avoid using .0 or .255 for link_id if it gets big, but assume < 254
+            link_sub = (link_id % 254) + 1 
+            
+            subnet_prefix = f"{base_first_octet}.{as_octet}.{link_sub}.0"
+            subnet_cidr = f"{subnet_prefix}/24"
+            
+            ip_a_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_a_int}"
+            ip_b_str = f"{base_first_octet}.{as_octet}.{link_sub}.{id_b_int}"
+            prefix_len = 24
 
         else:
-            # Cas 2 : Inter-AS
-            # Format attendu : 2000:1:0:AS1:AS2:ID1:ID2:X/112
-            # base_parts (2 blocs) + 0 (1 bloc) + AS1 (1 bloc) + AS2 (1 bloc) + ID1 (1 bloc) + ID2 (1 bloc) = 7 blocs 
-            # Il ne reste que 1 bloc pour l'hôte. (Total 8 blocs)
-            # DANGER: Si base_parts a déjà "::", il faut faire attention.
-            # Supposons base_parts = "2000:1".
+            # Cas 2 : Inter-AS (eBGP ou lien non assigné)
+            # Format attendu : 192.168.LINK_COUNTER.X/24
             
             low_as, high_as = sorted((as_a, as_b))
-            low_id, high_id = sorted((id_a_int, id_b_int))
             
-            # On construit explicitement les 7 premiers blocs
-            # 2000:1:0:AS1:AS2:ID1:ID2:0
-            subnet_str = f"{base_parts}:0:{low_as}:{high_as}:{low_id}:{high_id}:0"
+            # Generate unique Inter-AS subnet
+            pair_key = f"{low_as}_{high_as}"
+            inter_as_link_counters[pair_key] += 1
+            idx = inter_as_link_counters[pair_key]
             
-            try:
-                # On valide que c'est une IP correcte
-                base_ip_int = int(ipaddress.IPv6Address(subnet_str))
-                ip_a_str = str(ipaddress.IPv6Address(base_ip_int + id_a_int))
-                ip_b_str = str(ipaddress.IPv6Address(base_ip_int + id_b_int))
-                
-                # Pour le CIDR d'affichage qui finit par :: (optionnel mais propre)
-                subnet_cidr = f"{base_parts}:0:{low_as}:{high_as}:{low_id}:{high_id}::/112"
-            except Exception as e:
-                print(f"Erreur génération IP Inter-AS: {e}")
-                # Fallback simple
-                ip_a_str = f"2001:FFFF:{low_as}:{high_as}::{id_a_int}"
-                ip_b_str = f"2001:FFFF:{low_as}:{high_as}::{id_b_int}"
-                subnet_cidr = f"2001:FFFF:{low_as}:{high_as}::/64"
+            # Let's cleanly assign 192.168.X.Y where X is a unique inter-AS link id
+            # Since we could have multiple links between same pairs, we hash AS pair into 3rd octet
+            as_oct1 = low_as % 255 if low_as > 255 else low_as
+            as_oct2 = high_as % 255 if high_as > 255 else high_as
             
-            prefix_len = 112
+            # A unique 3rd octet combining AS and link index
+            third_octet = (as_oct1 + as_oct2 + idx) % 254 + 1
+            
+            subnet_prefix = f"192.168.{third_octet}.0"
+            subnet_cidr = f"{subnet_prefix}/24"
+            
+            ip_a_str = f"192.168.{third_octet}.{id_a_int}"
+            ip_b_str = f"192.168.{third_octet}.{id_b_int}"
+            prefix_len = 24
 
         # Configuration pour le routeur A
         interfaces_cfg[a].append({

@@ -35,26 +35,27 @@ def get_router_id(router_name):
 
 def get_loopback_ip(router_name, fmt="simple", as_number=None):
     """
-    Generates an IPv6 Loopback address based on the selected format.
+    Generates an IP Loopback address based on the selected format.
     Formats:
-      - 'simple': 2000::{ID}
-      - 'with_as': 2000:2:{AS}::{ID}
+      - 'simple': 1.1.1.1 (same as router ID)
+      - 'with_as': 10.255.AS.ID
     """
     num = get_router_number(router_name)
     
     if fmt == "simple":
-        return f"2000::{num}"
+        return get_router_id(router_name)
     
     elif fmt == "with_as":
-        # Format: 2000:2:AS::ID
-        # On utilise le bloc '2' pour distinguer les Loopbacks des Liens physiques (souvent en bloc '1')
+        # Format: 10.255.AS.ID
         if as_number:
             try:
-                # On utilise directement la string pour l'AS et l'ID (Decimal-in-Hex) pour la lisibilité
-                return f"2000:2:{as_number}::{num}"
+                numeric_as = int(as_number)
+                if numeric_as > 255:
+                    numeric_as = numeric_as % 255
+                return f"10.255.{numeric_as}.{num}"
             except ValueError:
-                return f"2000::2:{num}" # Fallback
+                return f"10.255.255.{num}" # Fallback
         else:
-            return f"2000::2:{num}"
+            return f"10.255.255.{num}"
     
-    return f"2000::{num}"
+    return get_router_id(router_name)

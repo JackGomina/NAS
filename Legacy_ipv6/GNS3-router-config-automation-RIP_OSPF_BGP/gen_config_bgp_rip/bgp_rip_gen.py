@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IPv6 BGP+RIP Config Generator (Unified iBGP/eBGP with RIP as IGP)
+ip BGP+RIP Config Generator (Unified iBGP/eBGP with RIP as IGP)
 """
 import json
 import os

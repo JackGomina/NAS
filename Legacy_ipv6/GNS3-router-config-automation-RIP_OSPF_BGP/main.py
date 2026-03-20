@@ -2,7 +2,7 @@
 """
 Orchestrateur Principal (GUI Version):
 1. Sélection du projet GNS3 via Interface Graphique.
-2. Configuration du préfixe IPv6 via Dialogue.
+2. Configuration du préfixe ip via Dialogue.
 3. Exécution séquentielle de l'automatisation.
 """
 
@@ -232,7 +232,7 @@ def main_gui():
     config_win.grab_set()
 
     # Section 1: Adressage
-    lf_addr = ttk.LabelFrame(config_win, text="1. Adressage IPv6", padding=10)
+    lf_addr = ttk.LabelFrame(config_win, text="1. Adressage ip", padding=10)
     lf_addr.pack(fill="x", padx=10, pady=10)
     
     ttk.Label(lf_addr, text="Préfixe des adresses physiques (ex: 2000:1::/64)\n Format prévu intra-AS : 2000:1:<AS>:<ID1>:<ID2>::<ID_local>/80\n Format prévu inter-AS : 2000:1:0:<AS1>:<AS2>:<ID1>:<ID2>::<ID_local>/112").pack(anchor="w")
