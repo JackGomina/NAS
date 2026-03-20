@@ -1,0 +1,646 @@
+{
+  "ip_base": "2000:1::/64",
+  "loopback_format": "with_as",
+  "routers": [
+    {
+      "name": "R1",
+      "protocol": "RIP",
+      "as_number": 100,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:100:1:2::1",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:100:1:4::1",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:100:1:2::/80",
+        "2000:1:100:1:4::/80"
+      ]
+    },
+    {
+      "name": "R2",
+      "protocol": "RIP",
+      "as_number": 100,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:100:1:2::2",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:100:2:3::2",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:100:2:4::2",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:100:300:2:15:2",
+          "prefix": 112
+        }
+      ],
+      "networks": [
+        "2000:1:0:100:300:2:15::/112",
+        "2000:1:100:1:2::/80",
+        "2000:1:100:2:3::/80",
+        "2000:1:100:2:4::/80"
+      ]
+    },
+    {
+      "name": "R3",
+      "protocol": "RIP",
+      "as_number": 100,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:100:2:3::3",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:100:3:8::3",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:100:3:6::3",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:100:3:5::3",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:100:2:3::/80",
+        "2000:1:100:3:5::/80",
+        "2000:1:100:3:6::/80",
+        "2000:1:100:3:8::/80"
+      ]
+    },
+    {
+      "name": "R4",
+      "protocol": "RIP",
+      "as_number": 100,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:100:1:4::4",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:100:4:5::4",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:100:2:4::4",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:100:1:4::/80",
+        "2000:1:100:2:4::/80",
+        "2000:1:100:4:5::/80"
+      ]
+    },
+    {
+      "name": "R6",
+      "protocol": "RIP",
+      "as_number": 100,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:100:5:6::6",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:100:3:6::6",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:100:200:6:9:6",
+          "prefix": 112
+        }
+      ],
+      "networks": [
+        "2000:1:0:100:200:6:9::/112",
+        "2000:1:100:3:6::/80",
+        "2000:1:100:5:6::/80"
+      ]
+    },
+    {
+      "name": "R5",
+      "protocol": "RIP",
+      "as_number": 100,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:100:4:5::5",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:100:5:6::5",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:100:5:8::5",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:100:3:5::5",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:100:3:5::/80",
+        "2000:1:100:4:5::/80",
+        "2000:1:100:5:6::/80",
+        "2000:1:100:5:8::/80"
+      ]
+    },
+    {
+      "name": "R8",
+      "protocol": "RIP",
+      "as_number": 100,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:100:3:8::8",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:100:5:8::8",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:100:200:7:8:8",
+          "prefix": 112
+        }
+      ],
+      "networks": [
+        "2000:1:0:100:200:7:8::/112",
+        "2000:1:100:3:8::/80",
+        "2000:1:100:5:8::/80"
+      ]
+    },
+    {
+      "name": "R7",
+      "protocol": "OSPF",
+      "as_number": 200,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:100:200:7:8:7",
+          "prefix": 112
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:200:7:10::7",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:200:7:14::7",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:0:100:200:7:8::/112",
+        "2000:1:200:7:10::/80",
+        "2000:1:200:7:14::/80"
+      ]
+    },
+    {
+      "name": "R9",
+      "protocol": "OSPF",
+      "as_number": 200,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:100:200:6:9:9",
+          "prefix": 112
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:200:9:14::9",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:200:9:10::9",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:0:100:200:6:9::/112",
+        "2000:1:200:9:10::/80",
+        "2000:1:200:9:14::/80"
+      ]
+    },
+    {
+      "name": "R10",
+      "protocol": "OSPF",
+      "as_number": 200,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:200:10:11::a",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:200:7:10::a",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:200:9:10::a",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:200:10:14::a",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:200:10:11::/80",
+        "2000:1:200:10:14::/80",
+        "2000:1:200:7:10::/80",
+        "2000:1:200:9:10::/80"
+      ]
+    },
+    {
+      "name": "R11",
+      "protocol": "OSPF",
+      "as_number": 200,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:200:11:12::b",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:200:10:11::b",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:200:11:13::b",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:200:500:11:17:b",
+          "prefix": 112
+        }
+      ],
+      "networks": [
+        "2000:1:0:200:500:11:17::/112",
+        "2000:1:200:10:11::/80",
+        "2000:1:200:11:12::/80",
+        "2000:1:200:11:13::/80"
+      ]
+    },
+    {
+      "name": "R12",
+      "protocol": "OSPF",
+      "as_number": 200,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:200:11:12::c",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:200:12:13::c",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:200:11:12::/80",
+        "2000:1:200:12:13::/80"
+      ]
+    },
+    {
+      "name": "R13",
+      "protocol": "OSPF",
+      "as_number": 200,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:200:12:13::d",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:200:13:14::d",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:200:11:13::d",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:200:11:13::/80",
+        "2000:1:200:12:13::/80",
+        "2000:1:200:13:14::/80"
+      ]
+    },
+    {
+      "name": "R14",
+      "protocol": "OSPF",
+      "as_number": 200,
+      "ebgp": false,
+      "interfaces": [
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:200:13:14::e",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "2000:1:200:9:14::e",
+          "prefix": 80
+        },
+        {
+          "name": "GigabitEthernet3/0",
+          "ip": "2000:1:200:7:14::e",
+          "prefix": 80
+        },
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:200:10:14::e",
+          "prefix": 80
+        }
+      ],
+      "networks": [
+        "2000:1:200:10:14::/80",
+        "2000:1:200:13:14::/80",
+        "2000:1:200:7:14::/80",
+        "2000:1:200:9:14::/80"
+      ]
+    },
+    {
+      "name": "R15",
+      "protocol": "RIP",
+      "as_number": 300,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:100:300:2:15:f",
+          "prefix": 112
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:0:300:400:15:16:f",
+          "prefix": 112
+        }
+      ],
+      "networks": [
+        "2000:1:0:100:300:2:15::/112",
+        "2000:1:0:300:400:15:16::/112"
+      ]
+    },
+    {
+      "name": "R16",
+      "protocol": "RIP",
+      "as_number": 400,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:300:400:15:16:10",
+          "prefix": 112
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:0:400:500:16:17:10",
+          "prefix": 112
+        }
+      ],
+      "networks": [
+        "2000:1:0:300:400:15:16::/112",
+        "2000:1:0:400:500:16:17::/112"
+      ]
+    },
+    {
+      "name": "R17",
+      "protocol": "RIP",
+      "as_number": 500,
+      "ebgp": true,
+      "interfaces": [
+        {
+          "name": "FastEthernet0/0",
+          "ip": "2000:1:0:400:500:16:17:11",
+          "prefix": 112
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "2000:1:0:200:500:11:17:11",
+          "prefix": 112
+        }
+      ],
+      "networks": [
+        "2000:1:0:200:500:11:17::/112",
+        "2000:1:0:400:500:16:17::/112"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "a": "R1",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R2",
+      "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "R2",
+      "a_iface": "GigabitEthernet2/0",
+      "b": "R3",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "R3",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R8",
+      "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "R1",
+      "a_iface": "GigabitEthernet2/0",
+      "b": "R4",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "R4",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R5",
+      "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "R5",
+      "a_iface": "GigabitEthernet2/0",
+      "b": "R6",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "R3",
+      "a_iface": "GigabitEthernet3/0",
+      "b": "R6",
+      "b_iface": "GigabitEthernet3/0"
+    },
+    {
+      "a": "R5",
+      "a_iface": "GigabitEthernet3/0",
+      "b": "R8",
+      "b_iface": "GigabitEthernet3/0"
+    },
+    {
+      "a": "R3",
+      "a_iface": "FastEthernet0/0",
+      "b": "R5",
+      "b_iface": "FastEthernet0/0"
+    },
+    {
+      "a": "R4",
+      "a_iface": "GigabitEthernet3/0",
+      "b": "R2",
+      "b_iface": "GigabitEthernet3/0"
+    },
+    {
+      "a": "R8",
+      "a_iface": "FastEthernet0/0",
+      "b": "R7",
+      "b_iface": "FastEthernet0/0"
+    },
+    {
+      "a": "R6",
+      "a_iface": "FastEthernet0/0",
+      "b": "R9",
+      "b_iface": "FastEthernet0/0"
+    },
+    {
+      "a": "R12",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R11",
+      "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "R11",
+      "a_iface": "GigabitEthernet2/0",
+      "b": "R10",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "R10",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R7",
+      "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "R12",
+      "a_iface": "GigabitEthernet2/0",
+      "b": "R13",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "R13",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R14",
+      "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "R14",
+      "a_iface": "GigabitEthernet2/0",
+      "b": "R9",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "R10",
+      "a_iface": "GigabitEthernet3/0",
+      "b": "R9",
+      "b_iface": "GigabitEthernet3/0"
+    },
+    {
+      "a": "R7",
+      "a_iface": "GigabitEthernet3/0",
+      "b": "R14",
+      "b_iface": "GigabitEthernet3/0"
+    },
+    {
+      "a": "R10",
+      "a_iface": "FastEthernet0/0",
+      "b": "R14",
+      "b_iface": "FastEthernet0/0"
+    },
+    {
+      "a": "R11",
+      "a_iface": "GigabitEthernet3/0",
+      "b": "R13",
+      "b_iface": "GigabitEthernet3/0"
+    },
+    {
+      "a": "R2",
+      "a_iface": "FastEthernet0/0",
+      "b": "R15",
+      "b_iface": "FastEthernet0/0"
+    },
+    {
+      "a": "R15",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R16",
+      "b_iface": "FastEthernet0/0"
+    },
+    {
+      "a": "R16",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R17",
+      "b_iface": "FastEthernet0/0"
+    },
+    {
+      "a": "R17",
+      "a_iface": "GigabitEthernet1/0",
+      "b": "R11",
+      "b_iface": "FastEthernet0/0"
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+hostname {{ router_name }}
+!
+ipv6 unicast-routing
+ipv6 cef
+!
+interface Loopback0
+ no ip address
+ ipv6 address {{ loopback_ip }}/128
+ ipv6 enable
+ ipv6 ospf 1 area 0
+!
+{% for iface in interfaces %}
+interface {{ iface.name }}
+ no ip address
+ ipv6 nd dad attempts 0
+ ipv6 address {{ iface.ip }}/{{ iface.prefix }}
+ ipv6 enable
+ {% if iface.ospf_enabled %}
+ ipv6 ospf 1 area 0
+ {% if iface.ospf_cost %}
+ ipv6 ospf cost {{ iface.ospf_cost }}
+ {% endif %}
+ {% endif %}
+ no shutdown
+!
+{% endfor %}
+!
+ipv6 router ospf 1
+ router-id {{ router_id }}
+ passive-interface Loopback0
+ {% if options.secure_redist %}
+ redistribute bgp {{ asn }} route-map BGP_TO_OSPF
+ {% else %}
+ redistribute bgp {{ asn }}
+ {% endif %}
+!
+router bgp {{ asn }}
+ bgp router-id {{ router_id }}
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ !
+ {% for neighbor in neighbors %}
+ neighbor {{ neighbor.ip }} remote-as {{ neighbor.asn }}
+ neighbor {{ neighbor.ip }} description to_{{ neighbor.name }}_{{ neighbor.relationship|default('peer') }}
+ {% if neighbor.is_ibgp %}
+ neighbor {{ neighbor.ip }} update-source Loopback0
+ {% endif %}
+ {% endfor %}
+ !
+ address-family ipv6 unicast
+ {% for neighbor in neighbors %}
+  neighbor {{ neighbor.ip }} activate
+    {% if neighbor.is_ibgp %}
+    neighbor {{ neighbor.ip }} next-hop-self
+    {% endif %}
+  {% if options.policies_enabled %}
+   neighbor {{ neighbor.ip }} send-community
+   {% if not neighbor.is_ibgp %}
+   neighbor {{ neighbor.ip }} route-map MAP_FROM_{{ neighbor.relationship|upper }} in
+   neighbor {{ neighbor.ip }} route-map MAP_TO_{{ neighbor.relationship|upper }} out
+   {% endif %}
+  {% endif %}
+ {% endfor %}
+ {% if networks %}
+  ! Networks to advertise
+  {% for net in networks %}
+  network {{ net }}
+  {% endfor %}
+ {% endif %}
+  network {{ loopback_ip }}/128
+  redistribute connected
+  {% if options.secure_redist %}
+  redistribute ospf 1 include-connected route-map OSPF_TO_BGP
+  {% else %}
+  redistribute ospf 1 include-connected
+  {% endif %}
+ exit-address-family
+!
+{% if options.secure_redist %}
+! Route-map to tag BGP routes redist into OSPF
+route-map BGP_TO_OSPF permit 10
+ set tag {{ asn }}
+!
+! Route-map to filter OSPF routes (deny tagged routes)
+route-map OSPF_TO_BGP deny 10
+ match tag {{ asn }}
+!
+route-map OSPF_TO_BGP permit 20
+!
+{% endif %}
+{% if options.policies_enabled %}
+!
+! --- GAO-REXFORD POLICIES ---
+! Community Definitions
+! 100:10 = Routes from CUSTOMER
+! 100:20 = Routes from PEER
+! 100:30 = Routes from PROVIDER
+!
+ip bgp-community new-format
+!
+! community-lists
+ip community-list standard FROM_CUSTOMER permit {{ asn }}:10
+ip community-list standard FROM_PEER     permit {{ asn }}:20
+ip community-list standard FROM_PROVIDER permit {{ asn }}:30
+
+! Prefix-lists (SELF): allow ping without specifying source
+! - Loopbacks: 2000:2:<AS>::X/128
+! - Intra-AS links: 2000:1:<AS>:.../80
+ipv6 prefix-list PL_SELF_AS{{ asn }} seq 10 permit 2000:2:{{ asn }}::/48 le 128
+ipv6 prefix-list PL_SELF_AS{{ asn }} seq 20 permit 2000:1:{{ asn }}::/48 le 80
+!
+! INBOUND POLICIES (Prefer Customer > Peer > Provider)
+!
+route-map MAP_FROM_CUSTOMER permit 10
+ set local-preference 200
+ set community {{ asn }}:10
+!
+route-map MAP_FROM_PEER permit 10
+ set local-preference 100
+ set community {{ asn }}:20
+!
+route-map MAP_FROM_PROVIDER permit 10
+ set local-preference 50
+ set community {{ asn }}:30
+!
+! OUTBOUND POLICIES (Valley-Free Rule)
+!
+! To Customer: Advertise EVERYTHING (Customer, Peer, Provider, Self)
+route-map MAP_TO_CUSTOMER permit 10
+!
+! To Peer: Advertise ONLY Customer routes (and Self)
+route-map MAP_TO_PEER permit 10
+ match community FROM_CUSTOMER
+route-map MAP_TO_PEER permit 20
+ match ipv6 address prefix-list PL_SELF_AS{{ asn }}
+!
+! To Provider: Advertise ONLY Customer routes (and Self)
+route-map MAP_TO_PROVIDER permit 10
+ match community FROM_CUSTOMER
+route-map MAP_TO_PROVIDER permit 20
+ match ipv6 address prefix-list PL_SELF_AS{{ asn }}
+!
+{% endif %}
+end
+write memory

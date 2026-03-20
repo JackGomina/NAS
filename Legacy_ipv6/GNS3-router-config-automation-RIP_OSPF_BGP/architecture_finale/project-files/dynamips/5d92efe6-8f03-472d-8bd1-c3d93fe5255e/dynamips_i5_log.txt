@@ -1,0 +1,51 @@
+Jan 16 09:57:47.720 HYPERVISOR: Release 0.2.17-x86/Windows (tag 2017072410)
+Jan 16 09:57:47.736 HYPERVISOR: Started on IP = localhost, TCP port = 60563.
+Jan 16 09:57:48.199 HYPERVISOR: exec_cmd: hypervisor version 
+Jan 16 09:57:48.199 HYPERVISOR: exec_cmd: hypervisor working_dir C:\Users\Hector\Desktop\INSA Lyon\3A-TC\S1\GNS Projet\architecture_finale\project-files\dynamips 
+Jan 16 09:57:48.199 GENERAL: working_dir=C:\Users\Hector\Desktop\INSA Lyon\3A-TC\S1\GNS Projet\architecture_finale\project-files\dynamips
+Jan 16 09:57:48.199 HYPERVISOR: exec_cmd: hypervisor working_dir C:\Users\Hector\Desktop\INSA Lyon\3A-TC\S1\GNS Projet\architecture_finale\project-files\dynamips\a0b9b17b-4ea6-4383-9fc4-e8f1055c14e5 
+Jan 16 09:57:48.199 GENERAL: working_dir=C:\Users\Hector\Desktop\INSA Lyon\3A-TC\S1\GNS Projet\architecture_finale\project-files\dynamips\a0b9b17b-4ea6-4383-9fc4-e8f1055c14e5
+Jan 16 09:57:48.199 HYPERVISOR: exec_cmd: vm create R6 6 c7200 
+Jan 16 09:57:48.199 VM: VM R6 created.
+Jan 16 09:57:48.199 HYPERVISOR: exec_cmd: vm set_con_tcp_port R6 5016 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: c7200 get_mac_addr R6 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: vm slot_add_binding R6 0 0 C7200-IO-FE 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: vm set_disk0 R6 0 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: vm set_exec_area R6 64 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: vm set_ios R6 C:/Users/Hector/GNS3/images/IOS/c7200-advipservicesk9-mz.152-4.S5.image 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: c7200 set_mac_addr R6 ca06.8650.0000 
+Jan 16 09:57:48.215 HYPERVISOR: exec_cmd: vm set_nvram R6 512 
+Jan 16 09:57:48.230 HYPERVISOR: exec_cmd: vm set_ram R6 512 
+Jan 16 09:57:48.230 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:57:48.230 HYPERVISOR: exec_cmd: vm slot_add_binding R6 1 0 PA-GE 
+Jan 16 09:57:48.230 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:57:48.230 HYPERVISOR: exec_cmd: vm slot_add_binding R6 2 0 PA-GE 
+Jan 16 09:57:48.230 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:57:48.230 HYPERVISOR: exec_cmd: vm slot_add_binding R6 3 0 PA-GE 
+Jan 16 09:57:56.900 HYPERVISOR: exec_cmd: nio create_udp udp-d786033c-c1b0-44bd-a75f-812febe6a9a2 10034 127.0.0.1 10035 
+Jan 16 09:57:57.246 HYPERVISOR: exec_cmd: vm slot_add_nio_binding R6 2 0 udp-d786033c-c1b0-44bd-a75f-812febe6a9a2 
+Jan 16 09:57:57.246 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:57:57.385 HYPERVISOR: exec_cmd: nio create_udp udp-3a395471-2a6e-4494-a9c9-ab574304ee88 10040 127.0.0.1 10041 
+Jan 16 09:57:57.393 HYPERVISOR: exec_cmd: vm slot_add_nio_binding R6 3 0 udp-3a395471-2a6e-4494-a9c9-ab574304ee88 
+Jan 16 09:57:57.393 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:57:58.436 HYPERVISOR: exec_cmd: nio create_udp udp-3a193f79-aca6-40b3-8a4f-4a8044386788 10068 127.0.0.1 10069 
+Jan 16 09:57:58.436 HYPERVISOR: exec_cmd: vm slot_add_nio_binding R6 0 0 udp-3a193f79-aca6-40b3-8a4f-4a8044386788 
+Jan 16 09:57:58.436 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:59:12.413 HYPERVISOR: exec_cmd: vm set_ghost_status R6 2 
+Jan 16 09:59:12.415 HYPERVISOR: exec_cmd: vm set_ghost_file R6 C:\Users\Hector\Desktop\INSA Lyon\3A-TC\S1\GNS Projet\architecture_finale\project-files\dynamips\c7200-advipservicesk9-mz.152-4.S5.image-512.ghost 
+Jan 16 09:59:12.415 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 09:59:12.417 HYPERVISOR: exec_cmd: vm set_config R6 configs\i6_startup-config.cfg 
+Jan 16 09:59:12.417 HYPERVISOR: exec_cmd: vm start R6 
+Jan 16 09:59:42.814 HYPERVISOR: exec_cmd: vm extract_config R6 
+Jan 16 10:02:50.478 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 10:02:50.478 HYPERVISOR: exec_cmd: vm stop R6 
+Jan 16 10:02:50.710 VM: VM R6 shutdown.
+Jan 16 10:02:50.713 HYPERVISOR: exec_cmd: vm extract_config R6 
+Jan 16 10:02:51.804 HYPERVISOR: exec_cmd: vm get_status R6 
+Jan 16 10:02:51.810 HYPERVISOR: exec_cmd: vm extract_config R6 
+Jan 16 10:02:51.821 HYPERVISOR: exec_cmd: vm delete R6 
+Jan 16 10:02:51.821 VM: VM R6 destroyed.
+Jan 16 10:02:51.832 HYPERVISOR: exec_cmd: hypervisor stop 
+Jan 16 10:02:52.215 HYPERVISOR: Stopped.
+Jan 16 10:02:52.215 GENERAL: reset done.
