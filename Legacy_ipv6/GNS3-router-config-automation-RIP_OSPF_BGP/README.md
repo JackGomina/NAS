@@ -3,7 +3,7 @@
 Portfolio project developed by **Leno Renaud, Hector Ernoult, Théodore Bonnier, Jules Gruffaz**.
 
 This project automates Cisco c7200 router configuration inside a GNS3 topology using Python scripts and Jinja2 templates.  
-It provides a GUI workflow that helps generate and inject routing configurations (RIP / OSPF / BGP) into a complete lab architecture.
+It provides a GUI workflow that helps generate and inject routing configurations ( / OSPF / BGP) into a complete lab architecture.
 
 ---
 
@@ -19,7 +19,7 @@ Build a reliable automation pipeline for multi-AS GNS3 labs, reducing manual rou
 - Automatic topology processing and configuration generation.
 - Templated router configs with Jinja2.
 - Automated config injection into router files.
-- Support for mixed routing designs (RIP, OSPF, BGP).
+- Support for mixed routing designs (, OSPF, BGP).
 - Experimental Gao-Rexford community handling.
 
 ### Tech Stack
@@ -55,7 +55,7 @@ utils.py                        # Utility helpers
 topology.json                   # Topology data source
 configs/                        # Generated router configurations
 get_topology/                   # Topology extraction logic
-gen_config_bgp_rip/             # BGP + RIP generation module
+gen_config_bgp_rip/             # BGP +  generation module
 gen_config_bgp_ospf/            # BGP + OSPF generation module
 injection_cfgs/                 # Config injection module
 architecture_finale/            # GNS3 project files
@@ -94,7 +94,7 @@ pip install jinja2
 
 - Open your GNS3 project.
 - Draw background rectangles around each AS:
-	- **Red** rectangle for RIP domains
+	- **Red** rectangle for  domains
 	- **Green** rectangle for OSPF domains
 - Colors must be pure values for detection (example: red = RGB `255, 0, 0`).
 
@@ -119,7 +119,7 @@ Then:
 ## Known Limitations
 
 - Gao-Rexford communities support is experimental.
-- You can define OSPF metrics on links between RIP routers in the GUI, but this does not affect final configs.
+- You can define OSPF metrics on links between  routers in the GUI, but this does not affect final configs.
 
 ---
 
@@ -128,7 +128,7 @@ Then:
 This project demonstrates:
 
 - Network automation design
-- Routing protocol orchestration (RIP/OSPF/BGP)
+- Routing protocol orchestration (/OSPF/BGP)
 - Template-driven infrastructure generation
 - Practical tooling for reproducible lab deployments
 - Team collaboration in an academic engineering context

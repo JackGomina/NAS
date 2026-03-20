@@ -13,7 +13,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- MAPPING COULEUR -> PROTOCOLE/AS ---
 COLOR_TO_PROTOCOL = {
-    "ff0000": "RIP",      # Rouge
     "00ff00": "OSPF"     # Vert
 }
 
@@ -94,7 +93,7 @@ def is_point_in_rectangle(px, py, rect):
 def assign_routers_to_as(nodes_data, rectangles):
     """
     Associe chaque routeur à un AS et un protocole selon les zones dessinées dans GNS3.
-    Les rectangles colorés (Rouge=RIP, Vert=OSPF) définissent le protocole IGP et l'AS.
+    Les rectangles colorés (Vert=OSPF) définissent le protocole IGP et l'AS.
     """
     router_to_as = {}
     
@@ -118,7 +117,7 @@ def assign_routers_to_as(nodes_data, rectangles):
         for rect in containing_rects:
             r_proto = rect.get("protocol")
             
-            if r_proto in ["RIP", "OSPF"]:
+            if r_proto in ["OSPF"]:
                 # On privilégie le premier protocole trouvé si aucun n'est encore défini
                 if protocol == "UNKNOWN":
                     protocol = r_proto

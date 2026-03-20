@@ -15,7 +15,6 @@ from pathlib import Path
 
 # Imports des modules
 from get_topology.get_topology import get_topology
-from gen_config_bgp_rip.bgp_rip_gen import generate_bgp_configs as gen_rip
 from gen_config_bgp_ospf.bgp_ospf_gen import generate_bgp_configs as gen_ospf
 from injection_cfgs.injection_cfgs import injection_cfg
 
@@ -62,9 +61,6 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", advanced
     print("\n[2/4] Génération des configurations...")
     if OUTPUT_CONFIGS_DIR.exists(): shutil.rmtree(OUTPUT_CONFIGS_DIR) 
     OUTPUT_CONFIGS_DIR.mkdir(exist_ok=True)
-
-    print("  -> Génération RIP...")
-    gen_rip(TOPOLOGY_JSON, output_dir=OUTPUT_CONFIGS_DIR, options=advanced_options)
     
     print("  -> Génération OSPF...")
     gen_ospf(TOPOLOGY_JSON, output_dir=OUTPUT_CONFIGS_DIR, options=advanced_options)
@@ -119,9 +115,6 @@ def show_tutorial(root):
     
     f_colors = ttk.Frame(step1)
     f_colors.pack(fill=tk.X, pady=2)
-    
-    tk.Label(f_colors, text="  ●  ", fg="#FF0000", font=("Arial", 14)).pack(side=tk.LEFT)
-    tk.Label(f_colors, text="ROUGE = RIP", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
     
     tk.Label(f_colors, text="      ●  ", fg="#00FF00", font=("Arial", 14)).pack(side=tk.LEFT)
     tk.Label(f_colors, text="VERT = OSPF", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
@@ -196,7 +189,7 @@ def main_gui():
     # directement dans topology.json à la racine
     try:
         topo_preview = get_topology(
-            file_path, ip_base="2000:1::/64", output_dir=ROOT_DIR, output_name="topology.json"
+            file_path, ip_base="10.0.0.0/8", output_dir=ROOT_DIR, output_name="topology.json"
         )
         detected_as = set()
         router_as_map = []
@@ -235,15 +228,15 @@ def main_gui():
     lf_addr = ttk.LabelFrame(config_win, text="1. Adressage ip", padding=10)
     lf_addr.pack(fill="x", padx=10, pady=10)
     
-    ttk.Label(lf_addr, text="Préfixe des adresses physiques (ex: 2000:1::/64)\n Format prévu intra-AS : 2000:1:<AS>:<ID1>:<ID2>::<ID_local>/80\n Format prévu inter-AS : 2000:1:0:<AS1>:<AS2>:<ID1>:<ID2>::<ID_local>/112").pack(anchor="w")
+    ttk.Label(lf_addr, text="Préfixe des adresses physiques (ex: 10.0.0.0/8)\n Format prévu intra-AS : 10.<AS>.<L>.0/24\n Format prévu inter-AS : 192.168.<L>.0/24").pack(anchor="w")
     entry_ip = ttk.Entry(lf_addr)
-    entry_ip.insert(0, "2000:1::/64")
+    entry_ip.insert(0, "10.0.0.0/8")
     entry_ip.pack(fill="x", pady=5)
     
     ttk.Label(lf_addr, text="Format des adresses Loopback :").pack(anchor="w", pady=(10, 0))
     var_loopback = tk.StringVar(value="with_as")
-    ttk.Radiobutton(lf_addr, text="Avec AS (2000:2:<AS>::<ID_routeur>)", variable=var_loopback, value="with_as").pack(anchor="w")
-    ttk.Radiobutton(lf_addr, text="Simple (2000::<ID_routeur>)", variable=var_loopback, value="simple").pack(anchor="w")
+    ttk.Radiobutton(lf_addr, text="Avec AS (10.255.<AS>.<ID>)", variable=var_loopback, value="with_as").pack(anchor="w")
+    ttk.Radiobutton(lf_addr, text="Simple (<ID>.<ID>.<ID>.<ID>)", variable=var_loopback, value="simple").pack(anchor="w")
 
     # Section 2: Options Avancées (Policies)
     lf_advanced = ttk.LabelFrame(config_win, text="2. Options Avancées", padding=10)
@@ -547,7 +540,7 @@ def main_gui():
         return
 
     # Extraction des valeurs
-    ip_base = config_results.get("ip_base", "2000:1::/64")
+    ip_base = config_results.get("ip_base", "10.0.0.0/8")
     loopback_choice = config_results.get("loopback_fmt", "simple")
 
     # 3. Lancer le traitement
