@@ -1,0 +1,9 @@
+Nos AS ont une plage d'adresse /24, et on attribue pour chaque lien un /30 au sein de ce /24
+Pour le /24, on met dans la GUI une adresse par défaut, mais n'importe qui qui lance le programme peut mettre sa plage qu'il veut pour chaque AS
+
+la loopback ne doit pas avoir la gueule ID:ID:ID:ID mais doit venir d'une plage aussi en /24 pour chaque AS qui peut etre incrémentée pour chaque routeur
+
+Tout le routage se fait en loopback globalement
+pour les adresses des autres AS, il faut surtout vérifier que la communication avec les loopbacks fonctionnent, le reste devrait suivre (les adresses des interfaces physiques)
+
+
