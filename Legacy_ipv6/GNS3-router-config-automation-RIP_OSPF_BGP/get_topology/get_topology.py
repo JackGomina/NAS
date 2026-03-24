@@ -133,7 +133,15 @@ def assign_routers_to_as(nodes_data, rectangles):
 
 
 # --- FONCTION PRINCIPALE ---
-def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="topology.json", loopback_format="simple", routing_strategy="grand_reseaux"):
+def get_topology(
+    gns3_file,
+    ip_base="10.0.0.0/8",
+    output_dir=None,
+    output_name="topology.json",
+    loopback_format="simple",
+    routing_strategy="grand_reseaux",
+    as_prefixes=None
+):
     """
     Extrait la topologie d'un fichier .gns3 et génère un fichier topology.json
     
@@ -143,7 +151,8 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
         output_dir (str): Répertoire de sortie (défaut: répertoire du script)
         output_name (str): Nom du fichier de sortie (défaut: "topology.json")
         loopback_format (str): Format des loopbacks
-        routing_strategy (str): Stratégie d'adressage IP ("grand_reseaux" ou "simple")
+        routing_strategy (str): Paramètre conservé pour compatibilité (non utilisé)
+        as_prefixes (dict): Mapping des préfixes AS, ex: {"1": {"prefix": "172.16.0.0", "prefix_len": 24}}
     
     Returns:
         dict: Les données de topologie extraites
@@ -240,28 +249,60 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
             router_to_as[a] = a_info
             router_to_as[b] = b_info
 
-    # --- 3. LOGIQUE D'ADRESSAGE MNÉMOTECHNIQUE AVEC AS ---
-    # IPv4 addressing: 
-    # Intra-AS: base.{AS}.{link_id}.{ID_LOCAL}/24
-    # Inter-AS: 192.168.{AS_MIN}.{AS_MAX}/24 (last octet is router ID)
-    
-    # Optional parsing of base IP, but we primarily use it for the first octet of Intra-AS
-    try:
-        base_net_obj = ipaddress.IPv4Network(ip_base, strict=False)
-        base_first_octet = str(base_net_obj.network_address).split('.')[0]
-    except Exception:
-        base_first_octet = "10"
-    
+    # --- 3. LOGIQUE D'ADRESSAGE ---
+    # Tous les liens sont alloués en /30.
+    # - Lien intra-AS: /30 dans le pool du préfixe de l'AS.
+    # - Lien inter-AS: /30 dans un pool inter-AS dédié.
+
+    if as_prefixes is None:
+        as_prefixes = {}
+
     interfaces_cfg = defaultdict(list)
     networks = defaultdict(set)
 
-    # Counters to generate unique subnets
-    intra_as_link_counters = defaultdict(int)
-    inter_as_link_counters = defaultdict(int)
+    def parse_as_network(as_number):
+        as_key = str(as_number)
+        cfg = as_prefixes.get(as_key, {})
 
-    def parse_iface_id(iface_name):
-        nums = re.findall(r'\d+', iface_name)
-        return int(nums[0]) if nums else 1
+        raw_prefix = cfg.get("prefix")
+        raw_len = cfg.get("prefix_len", 24)
+
+        try:
+            plen = int(raw_len)
+        except Exception:
+            plen = 24
+
+        if plen < 8 or plen > 30:
+            raise ValueError(f"Masque invalide pour AS{as_key}: /{plen} (attendu: 8..30)")
+
+        if raw_prefix:
+            try:
+                ipaddress.IPv4Address(str(raw_prefix))
+                return ipaddress.IPv4Network(f"{raw_prefix}/{plen}", strict=False)
+            except Exception as e:
+                raise ValueError(f"Préfixe invalide pour AS{as_key}: {raw_prefix}/{plen}") from e
+
+        # Fallback explicite si un AS n'a pas de config fournie
+        as_int = int(as_number) if str(as_number).isdigit() else 0
+        default_net = ipaddress.IPv4Network(f"172.16.{as_int % 256}.0/24", strict=False)
+        return default_net
+
+    as_subnet_iter = {}
+
+    def next_intra_subnet(as_number):
+        as_key = str(as_number)
+        if as_key not in as_subnet_iter:
+            as_net = parse_as_network(as_number)
+            if as_net.prefixlen > 30:
+                raise ValueError(f"Le préfixe de AS{as_key} doit être <= /30 pour allouer des liens /30")
+            as_subnet_iter[as_key] = as_net.subnets(new_prefix=30)
+        try:
+            return next(as_subnet_iter[as_key])
+        except StopIteration as e:
+            raise ValueError(f"Plus assez de sous-réseaux /30 disponibles dans le préfixe de AS{as_key}") from e
+
+    inter_pool = ipaddress.IPv4Network("172.31.0.0/16", strict=False)
+    inter_subnet_iter = inter_pool.subnets(new_prefix=30)
 
     # 3a. IDs
     node_to_id = {}
@@ -282,74 +323,31 @@ def get_topology(gns3_file, ip_base="10.0.0.0/8", output_dir=None, output_name="
         as_a = int(info_a['as_number']) if info_a and info_a.get('as_number') else 0
         as_b = int(info_b['as_number']) if info_b and info_b.get('as_number') else 0
 
-        low_id, high_id = sorted((id_a_int, id_b_int))
-
         if as_a == as_b and as_a != 0:
-            # Cas 1 : Intra-AS (Même AS et AS != 0)
-            
-            as_octet = as_a % 255 if as_a > 255 else as_a
-            
-            if routing_strategy == "grand_reseaux":
-                intra_as_link_counters[as_octet] += 1
-                # On commence à 0 pour le premier lien
-                link_id_0 = intra_as_link_counters[as_octet] - 1
-                
-                # 1 lien = 1 sous réseau /30 (4 IP, donc intervalle de 4)
-                subnet_int = link_id_0 * 4
-                octet3 = subnet_int // 256
-                octet4 = subnet_int % 256
-                
-                ip_a_val = subnet_int + 1
-                ip_b_val = subnet_int + 2
-                
-                subnet_prefix = f"10.{as_octet}.{octet3}.{octet4}"
-                subnet_cidr = f"{subnet_prefix}/30"
-                
-                ip_a_str = f"10.{as_octet}.{ip_a_val // 256}.{ip_a_val % 256}"
-                ip_b_str = f"10.{as_octet}.{ip_b_val // 256}.{ip_b_val % 256}"
-                prefix_len = 30
-                mask_str = "255.255.255.252"
-            elif routing_strategy == "simple":
-                iface_a_id = parse_iface_id(a_iface_name)
-                iface_b_id = parse_iface_id(b_iface_name)
-                
-                ip_a_str = f"10.{as_octet}.{id_a_int}.{iface_a_id}"
-                ip_b_str = f"10.{as_octet}.{id_b_int}.{iface_b_id}"
-                
-                # Le vrai masque est /24 mais on assigne selon l'interface pour le 'simple'
-                subnet_prefix = f"10.{as_octet}.0.0"
-                subnet_cidr = f"{subnet_prefix}/24"
+            # Cas 1 : Intra-AS (Même AS)
+            link_subnet = next_intra_subnet(as_a)
+            hosts = list(link_subnet.hosts())
 
-            prefix_len = 24 if routing_strategy == "simple" else 30
-            if routing_strategy == "simple":
-                mask_str = "255.255.255.0"
+            subnet_cidr = str(link_subnet)
+            ip_a_str = str(hosts[0])
+            ip_b_str = str(hosts[1])
+            prefix_len = 30
+            mask_str = "255.255.255.252"
 
         else:
-            # Cas 2 : Inter-AS (eBGP ou lien non assigné)
-            # Format attendu : 192.168.LINK_COUNTER.X/24
-            
-            low_as, high_as = sorted((as_a, as_b))
-            
-            # Generate unique Inter-AS subnet
-            pair_key = f"{low_as}_{high_as}"
-            inter_as_link_counters[pair_key] += 1
-            idx = inter_as_link_counters[pair_key]
-            
-            # Let's cleanly assign 192.168.X.Y where X is a unique inter-AS link id
-            # Since we could have multiple links between same pairs, we hash AS pair into 3rd octet
-            as_oct1 = low_as % 255 if low_as > 255 else low_as
-            as_oct2 = high_as % 255 if high_as > 255 else high_as
-            
-            # A unique 3rd octet combining AS and link index
-            third_octet = (as_oct1 + as_oct2 + idx) % 254 + 1
-            
-            subnet_prefix = f"192.168.{third_octet}.0"
-            subnet_cidr = f"{subnet_prefix}/24"
-            
-            ip_a_str = f"192.168.{third_octet}.{id_a_int}"
-            ip_b_str = f"192.168.{third_octet}.{id_b_int}"
-            prefix_len = 24
-            mask_str = "255.255.255.0"
+            # Cas 2 : Inter-AS (ou lien non assigné)
+            try:
+                link_subnet = next(inter_subnet_iter)
+            except StopIteration as e:
+                raise ValueError("Plus assez de sous-réseaux /30 disponibles pour les liens inter-AS") from e
+
+            hosts = list(link_subnet.hosts())
+            subnet_cidr = str(link_subnet)
+
+            ip_a_str = str(hosts[0])
+            ip_b_str = str(hosts[1])
+            prefix_len = 30
+            mask_str = "255.255.255.252"
 
         # Configuration pour le routeur A
         interfaces_cfg[a].append({

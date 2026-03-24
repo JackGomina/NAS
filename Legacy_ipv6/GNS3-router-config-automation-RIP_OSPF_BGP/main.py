@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import tkinter as tk
+import ipaddress
 from tkinter import filedialog, simpledialog, messagebox, ttk
 from pathlib import Path
 
@@ -47,7 +48,8 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
         output_dir=ROOT_DIR, 
         output_name="topology.json",
         loopback_format=loopback_format,
-        routing_strategy=routing_strategy
+        routing_strategy=routing_strategy,
+        as_prefixes=advanced_options.get("as_prefixes", {})
     )
     
     if topo_data is None:
@@ -209,15 +211,6 @@ def main_gui():
     # On remplace les simpledialog successifs par une seule fenêtre de config
     
     config_results = {}
-    
-    def submit_config():
-        config_results["routing_strategy"] = var_strategy.get()
-        config_results["enable_policies"] = var_policies.get()
-        config_results["enable_metrics"] = var_metrics.get()
-        config_results["secure_redist"] = var_redist.get()
-        config_results["bgp_policies"] = bgp_relations # On passe le dictionnaire des relations
-        config_results["ospf_costs"] = ospf_costs
-        config_win.destroy()
 
     config_win = tk.Toplevel(root)
     config_win.title("Configuration du Réseau")
@@ -227,13 +220,80 @@ def main_gui():
     # Section 1: Adressage
     lf_addr = ttk.LabelFrame(config_win, text="1. Adressage ip", padding=10)
     lf_addr.pack(fill="x", padx=10, pady=10)
-    
-    ttk.Label(lf_addr, text="Format prévu intra-AS : 10.<AS>.X.X\nFormat prévu inter-AS : 192.168.L.X").pack(anchor="w")
-    
-    ttk.Label(lf_addr, text="Stratégie IP Intra-AS :").pack(anchor="w", pady=(10, 0))
-    var_strategy = tk.StringVar(value="grand_reseaux")
-    ttk.Radiobutton(lf_addr, text="Grand Réseaux (10.AS.Lien.X)", variable=var_strategy, value="grand_reseaux").pack(anchor="w")
-    ttk.Radiobutton(lf_addr, text="Simple (10.AS.Routeur.Interface)", variable=var_strategy, value="simple").pack(anchor="w")
+
+    ttk.Label(
+        lf_addr,
+        text="Saisissez un préfixe IPv4 et un / par AS détecté (défaut /24).\nTous les liens seront adressés en /30."
+    ).pack(anchor="w")
+
+    as_prefix_vars = {}
+    as_mask_vars = {}
+
+    if sorted_as_list:
+        for idx, asn in enumerate(sorted_as_list):
+            default_prefix = f"172.16.{idx}.0"
+            row = ttk.Frame(lf_addr)
+            row.pack(fill="x", pady=4)
+
+            ttk.Label(row, text=f"AS {asn}", width=8).pack(side="left")
+
+            prefix_var = tk.StringVar(value=default_prefix)
+            as_prefix_vars[asn] = prefix_var
+            ttk.Entry(row, textvariable=prefix_var, width=22).pack(side="left", padx=(0, 8))
+
+            ttk.Label(row, text="/").pack(side="left")
+            mask_var = tk.StringVar(value="24")
+            as_mask_vars[asn] = mask_var
+            ttk.Spinbox(row, from_=8, to=30, textvariable=mask_var, width=5).pack(side="left", padx=(2, 0))
+    else:
+        ttk.Label(lf_addr, text="Aucun AS détecté dans la topologie.", foreground="red").pack(anchor="w", pady=5)
+
+    def submit_config():
+        if not sorted_as_list:
+            messagebox.showerror("Erreur", "Aucun AS détecté. Vérifiez les rectangles/AS dans GNS3 puis relancez.")
+            return
+
+        as_prefixes_cfg = {}
+        for asn in sorted_as_list:
+            raw_prefix = as_prefix_vars[asn].get().strip()
+            raw_mask = as_mask_vars[asn].get().strip()
+
+            if not raw_prefix:
+                messagebox.showerror("Erreur", f"Préfixe vide pour AS {asn}.")
+                return
+            if "/" in raw_prefix:
+                messagebox.showerror("Erreur", f"Entrez le préfixe de AS {asn} sans '/', le masque est dans le champ dédié.")
+                return
+
+            try:
+                mask = int(raw_mask)
+            except ValueError:
+                messagebox.showerror("Erreur", f"Masque invalide pour AS {asn}.")
+                return
+
+            if mask < 8 or mask > 30:
+                messagebox.showerror("Erreur", f"Masque hors bornes pour AS {asn} (attendu: 8..30).")
+                return
+
+            try:
+                ipaddress.IPv4Address(raw_prefix)
+                normalized_net = ipaddress.IPv4Network(f"{raw_prefix}/{mask}", strict=False)
+            except ValueError:
+                messagebox.showerror("Erreur", f"Préfixe IPv4 invalide pour AS {asn}: {raw_prefix}/{mask}")
+                return
+
+            as_prefixes_cfg[asn] = {
+                "prefix": str(normalized_net.network_address),
+                "prefix_len": mask
+            }
+
+        config_results["as_prefixes"] = as_prefixes_cfg
+        config_results["enable_policies"] = var_policies.get()
+        config_results["enable_metrics"] = var_metrics.get()
+        config_results["secure_redist"] = var_redist.get()
+        config_results["bgp_policies"] = bgp_relations
+        config_results["ospf_costs"] = ospf_costs
+        config_win.destroy()
 
     # Section 2: Options Avancées (Policies)
     lf_advanced = ttk.LabelFrame(config_win, text="2. Options Avancées", padding=10)
@@ -539,17 +599,22 @@ def main_gui():
     # Extraction des valeurs
     ip_base = "10.0.0.0/8"
     loopback_choice = "with_as"
-    routing_strategy = config_results.get("routing_strategy", "grand_reseaux")
+    routing_strategy = "grand_reseaux"
 
     # 3. Lancer le traitement
-    print(f"Options choisies : Policies={config_results['enable_policies']}, Metrics={config_results['enable_metrics']}, Redist={config_results['secure_redist']}, Stratégie={routing_strategy}")
+    print(
+        f"Options choisies : Policies={config_results['enable_policies']}, "
+        f"Metrics={config_results['enable_metrics']}, "
+        f"Redist={config_results['secure_redist']}"
+    )
     
     # Construction du dictionnaire d'options
     advanced_options = {
         "secure_redist": config_results["secure_redist"],
         "policies_enabled": config_results["enable_policies"],
         "bgp_relations": config_results.get("bgp_policies", {}),
-        "ospf_costs": config_results.get("ospf_costs", {})
+        "ospf_costs": config_results.get("ospf_costs", {}),
+        "as_prefixes": config_results.get("as_prefixes", {})
     }
     
     success, message = run_automation(file_path, ip_base, loopback_choice, routing_strategy, advanced_options)
