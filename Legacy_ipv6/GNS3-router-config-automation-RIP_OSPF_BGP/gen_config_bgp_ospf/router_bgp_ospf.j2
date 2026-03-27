@@ -25,12 +25,15 @@ interface {{ iface.name }}
 router ospf 1
  router-id {{ router_id }}
  passive-interface Loopback0
+ {% if options.enable_bgp %}
  {% if options.secure_redist %}
  redistribute bgp {{ asn }} route-map BGP_TO_OSPF subnets
  {% else %}
  redistribute bgp {{ asn }} subnets
  {% endif %}
+ {% endif %}
 !
+{% if options.enable_bgp %}
 router bgp {{ asn }}
  bgp router-id {{ router_id }}
  bgp log-neighbor-changes
@@ -60,7 +63,7 @@ router bgp {{ asn }}
  {% if networks %}
   ! Networks to advertise
   {% for net in networks %}
-  network {{ net }}
+    network {{ net.network }} mask {{ net.mask }}
   {% endfor %}
  {% endif %}
   network {{ loopback_ip }} mask 255.255.255.255
@@ -72,7 +75,9 @@ router bgp {{ asn }}
   {% endif %}
  exit-address-family
 !
+  {% endif %}
 {% if options.secure_redist %}
+  {% if options.enable_bgp %}
 ! Route-map to tag BGP routes redist into OSPF
 route-map BGP_TO_OSPF permit 10
  set tag {{ asn }}
@@ -83,6 +88,7 @@ route-map OSPF_TO_BGP deny 10
 !
 route-map OSPF_TO_BGP permit 20
 !
+{% endif %}
 {% endif %}
 {% if options.policies_enabled %}
 !

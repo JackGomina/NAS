@@ -223,28 +223,36 @@ def main_gui():
 
     ttk.Label(
         lf_addr,
-        text="Saisissez un préfixe IPv4 et un / par AS détecté (défaut /24).\nTous les liens seront adressés en /30."
+        text=(
+            "Saisissez 2 pools IPv4 par AS (tous en /24) :\n"
+            "- Pool Liens: utilisé pour allouer des /30 sur les liens intra-AS\n"
+            "- Pool Loopbacks: utilisé pour allouer les Loopback0"
+        )
     ).pack(anchor="w")
 
-    as_prefix_vars = {}
-    as_mask_vars = {}
+    as_link_pool_vars = {}
+    as_loop_pool_vars = {}
 
     if sorted_as_list:
         for idx, asn in enumerate(sorted_as_list):
-            default_prefix = f"172.16.{idx}.0"
+            default_link_pool = f"172.16.{idx}.0"
+            default_loop_pool = f"10.255.{idx}.0"
             row = ttk.Frame(lf_addr)
             row.pack(fill="x", pady=4)
 
             ttk.Label(row, text=f"AS {asn}", width=8).pack(side="left")
 
-            prefix_var = tk.StringVar(value=default_prefix)
-            as_prefix_vars[asn] = prefix_var
-            ttk.Entry(row, textvariable=prefix_var, width=22).pack(side="left", padx=(0, 8))
+            ttk.Label(row, text="Liens").pack(side="left", padx=(0, 4))
+            link_pool_var = tk.StringVar(value=default_link_pool)
+            as_link_pool_vars[asn] = link_pool_var
+            ttk.Entry(row, textvariable=link_pool_var, width=16).pack(side="left", padx=(0, 3))
+            ttk.Label(row, text="/24").pack(side="left", padx=(0, 8))
 
-            ttk.Label(row, text="/").pack(side="left")
-            mask_var = tk.StringVar(value="24")
-            as_mask_vars[asn] = mask_var
-            ttk.Spinbox(row, from_=8, to=30, textvariable=mask_var, width=5).pack(side="left", padx=(2, 0))
+            ttk.Label(row, text="Loopbacks").pack(side="left", padx=(0, 4))
+            loop_pool_var = tk.StringVar(value=default_loop_pool)
+            as_loop_pool_vars[asn] = loop_pool_var
+            ttk.Entry(row, textvariable=loop_pool_var, width=16).pack(side="left", padx=(0, 3))
+            ttk.Label(row, text="/24").pack(side="left")
     else:
         ttk.Label(lf_addr, text="Aucun AS détecté dans la topologie.", foreground="red").pack(anchor="w", pady=5)
 
@@ -255,39 +263,48 @@ def main_gui():
 
         as_prefixes_cfg = {}
         for asn in sorted_as_list:
-            raw_prefix = as_prefix_vars[asn].get().strip()
-            raw_mask = as_mask_vars[asn].get().strip()
+            raw_link_pool = as_link_pool_vars[asn].get().strip()
+            raw_loop_pool = as_loop_pool_vars[asn].get().strip()
 
-            if not raw_prefix:
-                messagebox.showerror("Erreur", f"Préfixe vide pour AS {asn}.")
+            if not raw_link_pool:
+                messagebox.showerror("Erreur", f"Pool liens vide pour AS {asn}.")
                 return
-            if "/" in raw_prefix:
-                messagebox.showerror("Erreur", f"Entrez le préfixe de AS {asn} sans '/', le masque est dans le champ dédié.")
-                return
-
-            try:
-                mask = int(raw_mask)
-            except ValueError:
-                messagebox.showerror("Erreur", f"Masque invalide pour AS {asn}.")
+            if not raw_loop_pool:
+                messagebox.showerror("Erreur", f"Pool loopbacks vide pour AS {asn}.")
                 return
 
-            if mask < 8 or mask > 30:
-                messagebox.showerror("Erreur", f"Masque hors bornes pour AS {asn} (attendu: 8..30).")
+            if "/" in raw_link_pool:
+                messagebox.showerror("Erreur", f"Entrez le pool liens de AS {asn} sans '/'. Le masque est fixé à /24.")
+                return
+            if "/" in raw_loop_pool:
+                messagebox.showerror("Erreur", f"Entrez le pool loopbacks de AS {asn} sans '/'. Le masque est fixé à /24.")
                 return
 
             try:
-                ipaddress.IPv4Address(raw_prefix)
-                normalized_net = ipaddress.IPv4Network(f"{raw_prefix}/{mask}", strict=False)
+                ipaddress.IPv4Address(raw_link_pool)
+                normalized_link_net = ipaddress.IPv4Network(f"{raw_link_pool}/24", strict=False)
+                ipaddress.IPv4Address(raw_loop_pool)
+                normalized_loop_net = ipaddress.IPv4Network(f"{raw_loop_pool}/24", strict=False)
             except ValueError:
-                messagebox.showerror("Erreur", f"Préfixe IPv4 invalide pour AS {asn}: {raw_prefix}/{mask}")
+                messagebox.showerror(
+                    "Erreur",
+                    f"Pool IPv4 invalide pour AS {asn}: liens={raw_link_pool}/24 loopbacks={raw_loop_pool}/24"
+                )
                 return
 
             as_prefixes_cfg[asn] = {
-                "prefix": str(normalized_net.network_address),
-                "prefix_len": mask
+                "links": {
+                    "prefix": str(normalized_link_net.network_address),
+                    "prefix_len": 24
+                },
+                "loopbacks": {
+                    "prefix": str(normalized_loop_net.network_address),
+                    "prefix_len": 24
+                }
             }
 
         config_results["as_prefixes"] = as_prefixes_cfg
+        config_results["enable_bgp"] = var_enable_bgp.get()
         config_results["enable_policies"] = var_policies.get()
         config_results["enable_metrics"] = var_metrics.get()
         config_results["secure_redist"] = var_redist.get()
@@ -299,13 +316,28 @@ def main_gui():
     lf_advanced = ttk.LabelFrame(config_win, text="2. Options Avancées", padding=10)
     lf_advanced.pack(fill="x", padx=10, pady=10)
 
-    # 2a. Redistribution Sécurisée
+    # 2a. BGP legacy (désactivé par défaut pour les phases OSPF/MPLS)
+    var_enable_bgp = tk.BooleanVar(value=False)
+    check_enable_bgp = ttk.Checkbutton(
+        lf_advanced,
+        text="Activer BGP IPv4 legacy (plein maillage iBGP/eBGP)",
+        variable=var_enable_bgp
+    )
+    check_enable_bgp.pack(anchor="w", pady=5)
+    ttk.Label(
+        lf_advanced,
+        text="   (Laisser décoché pour phase OSPF/MPLS sans BGP de service)",
+        font=("Arial", 8, "italic"),
+        foreground="gray"
+    ).pack(anchor="w")
+
+    # 2b. Redistribution Sécurisée
     var_redist = tk.BooleanVar(value=True)
     check_redist = ttk.Checkbutton(lf_advanced, text="Activer Redistribution Sécurisée (Route-Maps)", variable=var_redist)
     check_redist.pack(anchor="w", pady=5)
     ttk.Label(lf_advanced, text="   (Filtre les routes redistribuées pour éviter les boucles)", font=("Arial", 8, "italic"), foreground="gray").pack(anchor="w")
 
-    # 2b. BGP Policies (Gao-Rexford)
+    # 2c. BGP Policies (Gao-Rexford)
     var_policies = tk.BooleanVar(value=False)
     # Store relations: "100-200": "peer", "100-300": "customer" (from 100 pov)
     bgp_relations = {} 
@@ -470,7 +502,7 @@ def main_gui():
     btn_config_rels = ttk.Button(lf_advanced, text="Configurer Relations...", state="disabled", command=open_relations_window) 
     btn_config_rels.pack(anchor="w", padx=20, pady=5)
 
-    # 2c. OSPF Metrics
+    # 2d. OSPF Metrics
     var_metrics = tk.BooleanVar(value=False)
     # { "R1": { "Gi1/0": 10 } }
     ospf_costs = {} 
@@ -603,13 +635,15 @@ def main_gui():
 
     # 3. Lancer le traitement
     print(
-        f"Options choisies : Policies={config_results['enable_policies']}, "
+        f"Options choisies : BGP={config_results['enable_bgp']}, "
+        f"Policies={config_results['enable_policies']}, "
         f"Metrics={config_results['enable_metrics']}, "
         f"Redist={config_results['secure_redist']}"
     )
     
     # Construction du dictionnaire d'options
     advanced_options = {
+        "enable_bgp": config_results["enable_bgp"],
         "secure_redist": config_results["secure_redist"],
         "policies_enabled": config_results["enable_policies"],
         "bgp_relations": config_results.get("bgp_policies", {}),

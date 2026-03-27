@@ -152,7 +152,13 @@ def get_topology(
         output_name (str): Nom du fichier de sortie (défaut: "topology.json")
         loopback_format (str): Format des loopbacks
         routing_strategy (str): Paramètre conservé pour compatibilité (non utilisé)
-        as_prefixes (dict): Mapping des préfixes AS, ex: {"1": {"prefix": "172.16.0.0", "prefix_len": 24}}
+                as_prefixes (dict): Mapping des pools AS, ex:
+                        {
+                            "1": {
+                                "links": {"prefix": "172.16.0.0", "prefix_len": 24},
+                                "loopbacks": {"prefix": "10.255.0.0", "prefix_len": 24}
+                            }
+                        }
     
     Returns:
         dict: Les données de topologie extraites
@@ -260,31 +266,40 @@ def get_topology(
     interfaces_cfg = defaultdict(list)
     networks = defaultdict(set)
 
-    def parse_as_network(as_number):
+    def parse_as_pool(as_number, pool_kind):
         as_key = str(as_number)
         cfg = as_prefixes.get(as_key, {})
 
-        raw_prefix = cfg.get("prefix")
-        raw_len = cfg.get("prefix_len", 24)
+        # Backward compatibility: ancien format plat {prefix, prefix_len}
+        if "prefix" in cfg:
+            raw_prefix = cfg.get("prefix")
+            raw_len = cfg.get("prefix_len", 24)
+        else:
+            pool_cfg = cfg.get(pool_kind, {})
+            raw_prefix = pool_cfg.get("prefix")
+            raw_len = pool_cfg.get("prefix_len", 24)
 
         try:
             plen = int(raw_len)
         except Exception:
             plen = 24
 
-        if plen < 8 or plen > 30:
-            raise ValueError(f"Masque invalide pour AS{as_key}: /{plen} (attendu: 8..30)")
+        if plen != 24:
+            raise ValueError(f"Masque invalide pour AS{as_key} ({pool_kind}): /{plen} (attendu: /24)")
 
         if raw_prefix:
             try:
                 ipaddress.IPv4Address(str(raw_prefix))
                 return ipaddress.IPv4Network(f"{raw_prefix}/{plen}", strict=False)
             except Exception as e:
-                raise ValueError(f"Préfixe invalide pour AS{as_key}: {raw_prefix}/{plen}") from e
+                raise ValueError(f"Préfixe invalide pour AS{as_key} ({pool_kind}): {raw_prefix}/{plen}") from e
 
         # Fallback explicite si un AS n'a pas de config fournie
         as_int = int(as_number) if str(as_number).isdigit() else 0
-        default_net = ipaddress.IPv4Network(f"172.16.{as_int % 256}.0/24", strict=False)
+        if pool_kind == "links":
+            default_net = ipaddress.IPv4Network(f"172.16.{as_int % 256}.0/24", strict=False)
+        else:
+            default_net = ipaddress.IPv4Network(f"10.255.{as_int % 256}.0/24", strict=False)
         return default_net
 
     as_subnet_iter = {}
@@ -292,7 +307,7 @@ def get_topology(
     def next_intra_subnet(as_number):
         as_key = str(as_number)
         if as_key not in as_subnet_iter:
-            as_net = parse_as_network(as_number)
+            as_net = parse_as_pool(as_number, "links")
             if as_net.prefixlen > 30:
                 raise ValueError(f"Le préfixe de AS{as_key} doit être <= /30 pour allouer des liens /30")
             as_subnet_iter[as_key] = as_net.subnets(new_prefix=30)
@@ -303,6 +318,18 @@ def get_topology(
 
     inter_pool = ipaddress.IPv4Network("172.31.0.0/16", strict=False)
     inter_subnet_iter = inter_pool.subnets(new_prefix=30)
+
+    loopback_iter = {}
+
+    def next_loopback_ip(as_number):
+        as_key = str(as_number)
+        if as_key not in loopback_iter:
+            loop_net = parse_as_pool(as_number, "loopbacks")
+            loopback_iter[as_key] = loop_net.hosts()
+        try:
+            return str(next(loopback_iter[as_key]))
+        except StopIteration as e:
+            raise ValueError(f"Plus assez d'adresses loopback disponibles dans le pool /24 de AS{as_key}") from e
 
     # 3a. IDs
     node_to_id = {}
@@ -378,11 +405,18 @@ def get_topology(
     # Ajouter les routeurs avec leur protocole et AS assignés
     for router_name in routers_list:
         as_info = router_to_as.get(router_name, {"protocol": "UNKNOWN", "as_number": None, "ebgp": False})
+
+        asn = as_info.get("as_number")
+        loopback_ip = None
+        if asn is not None:
+            loopback_ip = next_loopback_ip(asn)
+
         router_entry = {
             "name": router_name,
             "protocol": as_info.get("protocol"),
             "as_number": as_info.get("as_number"),
             "ebgp": as_info.get("ebgp", False),
+            "loopback_ip": loopback_ip,
             "interfaces": interfaces_cfg.get(router_name, []),
             "networks": sorted(networks.get(router_name, []))
         }

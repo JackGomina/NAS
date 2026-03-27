@@ -5,6 +5,7 @@ ip BGP Config Generator (Unified iBGP/eBGP)
 import json
 import os
 import sys
+import ipaddress
 from pathlib import Path
 from jinja2 import Template
 import sys
@@ -16,6 +17,7 @@ from utils import get_router_id, get_loopback_ip
 def generate_bgp_configs(topology_file, output_dir="configs", options=None):
     if options is None:
         options = {}
+    enable_bgp = options.get("enable_bgp", False)
     print(f"Loading topology from {topology_file}...")
     with open(topology_file, 'r') as f:
         topo = json.load(f)
@@ -28,7 +30,7 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
     # Enrich router data with deduced fields
     for name, r in routers.items():
         r["router_id"] = get_router_id(name)
-        r["loopback_ip"] = get_loopback_ip(name, fmt=loopback_fmt, as_number=r.get("as_number"))
+        r["loopback_ip"] = r.get("loopback_ip") or get_loopback_ip(name, fmt=loopback_fmt, as_number=r.get("as_number"))
         # Default ASN if missing (fallback for safety)
         if "as_number" not in r or r["as_number"] is None:
             r["as_number"] = 65000 
@@ -71,7 +73,7 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
             continue
 
         # eBGP Logic: Different AS -> Peer physically
-        if asA != asB:
+        if enable_bgp and asA != asB:
             # We only care about configuring the OSPF router side
             
             # Setup side A if it is OSPF
@@ -103,30 +105,31 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
     # 2. Process Full Mesh for iBGP (Loopback Peering) within same AS for OSPF routers
     ospf_router_names = [n for n, r in routers.items() if r.get("protocol") == "OSPF"]
     
-    for i in range(len(ospf_router_names)):
-        for j in range(i + 1, len(ospf_router_names)):
-            nameA = ospf_router_names[i]
-            nameB = ospf_router_names[j]
-            
-            rA = routers[nameA]
-            rB = routers[nameB]
-            
-            # Only connect if same AS (iBGP)
-            if rA["as_number"] == rB["as_number"]:
-                # iBGP Peering A -> B
-                rA["bgp_neighbors"].append({
-                    "name": nameB,
-                    "ip": rB["loopback_ip"],
-                    "asn": rB["as_number"],
-                    "is_ibgp": True
-                })
-                # iBGP Peering B -> A
-                rB["bgp_neighbors"].append({
-                    "name": nameA,
-                    "ip": rA["loopback_ip"],
-                    "asn": rA["as_number"],
-                    "is_ibgp": True
-                })
+    if enable_bgp:
+        for i in range(len(ospf_router_names)):
+            for j in range(i + 1, len(ospf_router_names)):
+                nameA = ospf_router_names[i]
+                nameB = ospf_router_names[j]
+                
+                rA = routers[nameA]
+                rB = routers[nameB]
+                
+                # Only connect if same AS (iBGP)
+                if rA["as_number"] == rB["as_number"]:
+                    # iBGP Peering A -> B
+                    rA["bgp_neighbors"].append({
+                        "name": nameB,
+                        "ip": rB["loopback_ip"],
+                        "asn": rB["as_number"],
+                        "is_ibgp": True
+                    })
+                    # iBGP Peering B -> A
+                    rB["bgp_neighbors"].append({
+                        "name": nameA,
+                        "ip": rA["loopback_ip"],
+                        "asn": rA["as_number"],
+                        "is_ibgp": True
+                    })
 
     # Generate Configs
     out_path = Path(output_dir)
@@ -196,7 +199,13 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
             asn=r["as_number"],
             interfaces=r["interfaces"],
             neighbors=neighbors_list,
-            networks=r.get("networks", []),
+            networks=[
+                {
+                    "network": str(ipaddress.ip_network(net, strict=False).network_address),
+                    "mask": str(ipaddress.ip_network(net, strict=False).netmask)
+                }
+                for net in r.get("networks", [])
+            ],
             options=options
         )
         
