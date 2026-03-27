@@ -18,21 +18,21 @@
         "computes": [],
         "drawings": [
             {
-                "drawing_id": "78e4063c-29fb-4627-9fa2-7648ab677c2d",
-                "locked": false,
-                "rotation": 0,
-                "svg": "<svg width=\"558\" height=\"351\"><rect width=\"558\" height=\"351\" fill=\"#ffffff\" fill-opacity=\"1.0\" stroke-width=\"2\" stroke=\"#ff0000\" /></svg>",
-                "x": -775,
-                "y": -35,
-                "z": 0
-            },
-            {
                 "drawing_id": "065efdd2-82c7-4a89-bc74-20e7560372f8",
                 "locked": false,
                 "rotation": 0,
                 "svg": "<svg width=\"558\" height=\"350\"><rect width=\"558\" height=\"350\" fill=\"#ffffff\" fill-opacity=\"1.0\" stroke-width=\"2\" stroke=\"#00ff00\" /></svg>",
-                "x": -195,
-                "y": -33,
+                "x": -183,
+                "y": -39,
+                "z": 0
+            },
+            {
+                "drawing_id": "fd74837b-9d60-44ee-95d4-5da4974d9bcf",
+                "locked": false,
+                "rotation": 0,
+                "svg": "<svg width=\"200\" height=\"47\"><rect width=\"200\" height=\"47\" fill=\"#ffffff\" fill-opacity=\"1.0\" stroke-width=\"2\" stroke=\"#00ff00\" /></svg>",
+                "x": -697,
+                "y": -54,
                 "z": 0
             }
         ],

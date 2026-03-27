@@ -1,6 +1,6 @@
 cygwin warning:
-  MS-DOS style path detected: C:\Users\Hector\Desktop\INSA Lyon\3A-TC\S1\GNS Projet\architecture_finale\project-files\dynamips
-  Preferred POSIX equivalent is: /cygdrive/c/Users/Hector/Desktop/INSA Lyon/3A-TC/S1/GNS Projet/architecture_finale/project-files/dynamips
+  MS-DOS style path detected: C:\Users\admin\Documents\GitHub\NAS\Legacy_ipv6\GNS3-router-config-automation-RIP_OSPF_BGP\architecture_finale\project-files\dynamips
+  Preferred POSIX equivalent is: /cygdrive/c/Users/admin/Documents/GitHub/NAS/Legacy_ipv6/GNS3-router-config-automation-RIP_OSPF_BGP/architecture_finale/project-files/dynamips
   CYGWIN environment variable option "nodosfilewarning" turns off this warning.
   Consult the user's guide for more details about POSIX paths:
     http://cygwin.com/cygwin-ug-net/using.html#using-pathnames
