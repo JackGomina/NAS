@@ -338,11 +338,6 @@ def get_topology(
         else:
             role = "C"
 
-        # Critère auto RR: routeur provider dont le nom contient "RR".
-        # Exemples: RR1, CORE-RR2, RRX.
-        if as_type == "provider" and "RR" in str(router_name).upper():
-            role = "RR"
-
         as_info["as_type"] = as_type
         as_info["role"] = role
         router_to_as[router_name] = as_info

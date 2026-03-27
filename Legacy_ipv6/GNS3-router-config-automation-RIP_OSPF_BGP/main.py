@@ -168,6 +168,18 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
     missing_vpnv4 = []
     unexpected_vpnv4 = []
 
+    provider_rr_present_by_as = {}
+    for r in topo_data.get("routers", []):
+        if str(r.get("as_type", "unknown")).lower() != "provider":
+            continue
+        asn = r.get("as_number")
+        if asn is None:
+            continue
+        as_key = str(asn)
+        provider_rr_present_by_as.setdefault(as_key, False)
+        if str(r.get("role", "UNKNOWN")).upper() == "RR":
+            provider_rr_present_by_as[as_key] = True
+
     for r in topo_data.get("routers", []):
         router_name = r.get("name")
         role = str(r.get("role", "UNKNOWN")).upper()
@@ -177,7 +189,9 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
 
         cfg_text = cfg_path.read_text(encoding="utf-8")
         has_vpnv4 = "address-family vpnv4" in cfg_text
-        expected_vpnv4 = role in {"PE", "RR"}
+        as_key = str(r.get("as_number")) if r.get("as_number") is not None else None
+        rr_present_in_as = provider_rr_present_by_as.get(as_key, False)
+        expected_vpnv4 = (role == "RR") or (role == "PE" and rr_present_in_as)
 
         if expected_vpnv4 and not has_vpnv4:
             missing_vpnv4.append(router_name)
@@ -339,7 +353,7 @@ def main_gui():
     config_win.geometry("760x760")
     config_win.grab_set()
 
-    # Section 0: Validation des roles detectes
+    # Section 0: Rôles détectés + sélection RR
     lf_roles = ttk.LabelFrame(config_win, text="0. Rôles routeurs (auto depuis .gns3)", padding=10)
     lf_roles.pack(fill="x", padx=10, pady=10)
 
@@ -347,32 +361,44 @@ def main_gui():
         lf_roles,
         text=(
             "Règle auto: bordure + AS FAI => PE, coeur FAI => P, bordure client => CE.\n"
-            "Vous pouvez corriger manuellement si nécessaire."
+            "Les RR ne sont plus déduits par le nom: cochez RR sur les routeurs provider voulus."
         )
     ).pack(anchor="w")
 
-    role_vars = {}
+    rr_enable_vars = {}
     if preview_routers:
         for r in preview_routers:
             router_name = r.get("name", "?")
             asn = r.get("as_number", "?")
             as_type = r.get("as_type", "unknown")
+            detected_role = str(r.get("role", "UNKNOWN")).upper()
 
             row = ttk.Frame(lf_roles)
             row.pack(fill="x", pady=2)
 
             ttk.Label(row, text=f"{router_name} (AS {asn}, {as_type})", width=38).pack(side="left")
-            role_var = tk.StringVar(value=r.get("role", "UNKNOWN"))
-            role_vars[router_name] = role_var
-            ttk.Combobox(
-                row,
-                textvariable=role_var,
-                values=["PE", "P", "RR", "CE", "C", "UNKNOWN"],
-                state="readonly",
-                width=12
-            ).pack(side="left")
+            ttk.Label(row, text=f"Role auto: {detected_role}", width=16).pack(side="left", padx=(0, 10))
+
+            if as_type == "provider" and detected_role in {"P", "PE", "RR"}:
+                rr_var = tk.BooleanVar(value=(detected_role == "RR"))
+                rr_enable_vars[router_name] = rr_var
+                ttk.Checkbutton(row, text="Promouvoir en RR", variable=rr_var).pack(side="left")
+            else:
+                ttk.Label(row, text="-").pack(side="left")
     else:
         ttk.Label(lf_roles, text="Aucun routeur détecté.", foreground="red").pack(anchor="w")
+
+    # Sécurité UX: si aucun RR n'est coché, on en pré-coche un automatiquement.
+    if rr_enable_vars and not any(v.get() for v in rr_enable_vars.values()):
+        preferred_rr_name = None
+        for r in preview_routers:
+            name = r.get("name")
+            if name in rr_enable_vars and str(r.get("role", "UNKNOWN")).upper() == "P":
+                preferred_rr_name = name
+                break
+        if preferred_rr_name is None:
+            preferred_rr_name = next(iter(rr_enable_vars.keys()))
+        rr_enable_vars[preferred_rr_name].set(True)
 
     # Section 1: Adressage
     lf_addr = ttk.LabelFrame(config_win, text="1. Adressage ip", padding=10)
@@ -418,6 +444,13 @@ def main_gui():
             messagebox.showerror("Erreur", "Aucun AS détecté. Vérifiez les rectangles/AS dans GNS3 puis relancez.")
             return
 
+        if not rr_enable_vars:
+            messagebox.showerror("Erreur", "Aucun routeur provider éligible RR détecté.")
+            return
+        if not any(v.get() for v in rr_enable_vars.values()):
+            messagebox.showerror("Erreur", "Au moins un RR doit être sélectionné avant de lancer.")
+            return
+
         as_prefixes_cfg = {}
         for asn in sorted_as_list:
             raw_link_pool = as_link_pool_vars[asn].get().strip()
@@ -461,11 +494,16 @@ def main_gui():
             }
 
         config_results["as_prefixes"] = as_prefixes_cfg
-        config_results["role_overrides"] = {
-            name: var.get()
-            for name, var in role_vars.items()
-            if var.get() != detected_role_map.get(name, "UNKNOWN")
-        }
+        role_overrides = {}
+        for router_name, is_rr_var in rr_enable_vars.items():
+            auto_role = str(detected_role_map.get(router_name, "UNKNOWN")).upper()
+            wants_rr = bool(is_rr_var.get())
+            if wants_rr and auto_role != "RR":
+                role_overrides[router_name] = "RR"
+            if (not wants_rr) and auto_role == "RR":
+                # Repli explicite: RR desactivé -> role provider non-RR par defaut.
+                role_overrides[router_name] = "P"
+        config_results["role_overrides"] = role_overrides
         config_win.destroy()
 
     # Bouton Valider
