@@ -223,11 +223,12 @@ def main_gui():
 
     ttk.Label(
         lf_addr,
-        text="Saisissez un préfixe IPv4 et un / par AS détecté (défaut /24).\nTous les liens seront adressés en /30."
+        text="Saisissez un préfixe IPv4, un / et activez LDP par AS détecté (défaut /24).\nTous les liens seront adressés en /30."
     ).pack(anchor="w")
 
     as_prefix_vars = {}
     as_mask_vars = {}
+    as_ldp_vars = {}
 
     if sorted_as_list:
         for idx, asn in enumerate(sorted_as_list):
@@ -245,6 +246,10 @@ def main_gui():
             mask_var = tk.StringVar(value="24")
             as_mask_vars[asn] = mask_var
             ttk.Spinbox(row, from_=8, to=30, textvariable=mask_var, width=5).pack(side="left", padx=(2, 0))
+
+            ldp_var = tk.BooleanVar(value=False)
+            as_ldp_vars[asn] = ldp_var
+            ttk.Checkbutton(row, text="LDP", variable=ldp_var).pack(side="left", padx=(12, 0))
     else:
         ttk.Label(lf_addr, text="Aucun AS détecté dans la topologie.", foreground="red").pack(anchor="w", pady=5)
 
@@ -254,6 +259,7 @@ def main_gui():
             return
 
         as_prefixes_cfg = {}
+        ldp_as_cfg = {}
         for asn in sorted_as_list:
             raw_prefix = as_prefix_vars[asn].get().strip()
             raw_mask = as_mask_vars[asn].get().strip()
@@ -286,8 +292,10 @@ def main_gui():
                 "prefix": str(normalized_net.network_address),
                 "prefix_len": mask
             }
+            ldp_as_cfg[asn] = bool(as_ldp_vars[asn].get())
 
         config_results["as_prefixes"] = as_prefixes_cfg
+        config_results["ldp_as_enabled"] = ldp_as_cfg
         config_results["enable_policies"] = var_policies.get()
         config_results["enable_metrics"] = var_metrics.get()
         config_results["secure_redist"] = var_redist.get()
@@ -614,7 +622,8 @@ def main_gui():
         "policies_enabled": config_results["enable_policies"],
         "bgp_relations": config_results.get("bgp_policies", {}),
         "ospf_costs": config_results.get("ospf_costs", {}),
-        "as_prefixes": config_results.get("as_prefixes", {})
+        "as_prefixes": config_results.get("as_prefixes", {}),
+        "ldp_as_enabled": config_results.get("ldp_as_enabled", {})
     }
     
     success, message = run_automation(file_path, ip_base, loopback_choice, routing_strategy, advanced_options)

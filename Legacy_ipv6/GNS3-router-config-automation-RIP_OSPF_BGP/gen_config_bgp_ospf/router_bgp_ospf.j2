@@ -2,6 +2,10 @@ hostname {{ router_name }}
 !
 ip unicast-routing
 ip cef
+{% if ldp_enabled %}
+mpls label protocol ldp
+mpls ldp router-id Loopback0 force
+{% endif %}
 !
 interface Loopback0
  no ip address
@@ -17,6 +21,9 @@ interface {{ iface.name }}
  {% if iface.ospf_cost %}
  ip ospf cost {{ iface.ospf_cost }}
  {% endif %}
+ {% endif %}
+ {% if iface.ldp_enabled %}
+ mpls ip
  {% endif %}
  no shutdown
 !

@@ -36,6 +36,7 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
         # Initialize OSPF enabled on all interfaces by default (will be disabled for eBGP links)
         for iface in r.get("interfaces", []):
             iface["ospf_enabled"] = True
+            iface["ldp_enabled"] = False
             # Apply OSPF Costs if defined in options
             cost_map = options.get("ospf_costs", {}).get(name, {})
             if iface["name"] in cost_map:
@@ -99,6 +100,15 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
                 for iface in rB["interfaces"]:
                     if iface["name"] == link["b_iface"]:
                         iface["ospf_enabled"] = False
+
+    # 1b. Enable LDP on interfaces for selected AS only (and only where OSPF is enabled)
+    ldp_as_enabled = options.get("ldp_as_enabled", {})
+    for name, r in routers.items():
+        asn_key = str(r.get("as_number"))
+        ldp_for_as = bool(ldp_as_enabled.get(asn_key, False))
+        for iface in r.get("interfaces", []):
+            iface["ldp_enabled"] = bool(ldp_for_as and iface.get("ospf_enabled", False))
+        r["ldp_enabled"] = any(i.get("ldp_enabled", False) for i in r.get("interfaces", []))
 
     # 2. Process Full Mesh for iBGP (Loopback Peering) within same AS for OSPF routers
     ospf_router_names = [n for n, r in routers.items() if r.get("protocol") == "OSPF"]
@@ -194,6 +204,7 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
             router_id=r["router_id"],
             loopback_ip=r["loopback_ip"],
             asn=r["as_number"],
+            ldp_enabled=r.get("ldp_enabled", False),
             interfaces=r["interfaces"],
             neighbors=neighbors_list,
             networks=r.get("networks", []),
