@@ -1,6 +1,5 @@
 hostname {{ router_name }}
 !
-ip unicast-routing
 ip cef
 {% if enable_mpls %}
 mpls label protocol ldp
@@ -55,4 +54,5 @@ router bgp {{ bgp.asn }}
  exit-address-family
 !
 {% endif %}
-write memory
+!
+end

@@ -12,7 +12,6 @@ from jinja2 import Template
 # Add root directory to sys.path to allow importing utils
 sys.path.append(str(Path(__file__).parent.parent))
 from utils import get_loopback_ip
-from utils import get_router_id
 
 
 def generate_bgp_configs(topology_file, output_dir="configs", options=None):
@@ -120,7 +119,7 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
             router_name=name,
             loopback_ip=loopback_ip,
             interfaces=interfaces,
-            router_id=get_router_id(name),
+            router_id=loopback_ip,
             enable_ospf=enable_ospf,
             ospf_process_id=1,
             enable_mpls=enable_mpls,
@@ -128,7 +127,7 @@ def generate_bgp_configs(topology_file, output_dir="configs", options=None):
                 "enabled": len(rr_peering.get(name, [])) > 0,
                 "asn": router.get("as_number"),
                 "neighbors": rr_peering.get(name, []),
-                "router_id": get_router_id(name)
+                "router_id": loopback_ip
             }
         )
 
