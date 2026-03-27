@@ -2,134 +2,57 @@ hostname {{ router_name }}
 !
 ip unicast-routing
 ip cef
+{% if enable_mpls %}
+mpls label protocol ldp
+mpls ldp router-id Loopback0 force
+{% endif %}
 !
 interface Loopback0
  no ip address
  ip address {{ loopback_ip }} 255.255.255.255
- ip ospf 1 area 0
+{% if enable_ospf %}
+ ip ospf {{ ospf_process_id }} area 0
+{% endif %}
 !
 {% for iface in interfaces %}
 interface {{ iface.name }}
  no ip address
  ip address {{ iface.ip }} {{ iface.mask }}
- {% if iface.ospf_enabled %}
- ip ospf 1 area 0
- {% if iface.ospf_cost %}
- ip ospf cost {{ iface.ospf_cost }}
- {% endif %}
- {% endif %}
+{% if iface.ospf_enabled %}
+ ip ospf {{ ospf_process_id }} area 0
+{% endif %}
+{% if iface.mpls_enabled %}
+ mpls ip
+{% endif %}
  no shutdown
 !
 {% endfor %}
-!
-router ospf 1
+{% if enable_ospf %}
+router ospf {{ ospf_process_id }}
  router-id {{ router_id }}
  passive-interface Loopback0
- {% if options.enable_bgp %}
- {% if options.secure_redist %}
- redistribute bgp {{ asn }} route-map BGP_TO_OSPF subnets
- {% else %}
- redistribute bgp {{ asn }} subnets
- {% endif %}
- {% endif %}
 !
-{% if options.enable_bgp %}
-router bgp {{ asn }}
- bgp router-id {{ router_id }}
+{% endif %}
+{% if bgp.enabled %}
+router bgp {{ bgp.asn }}
+ bgp router-id {{ bgp.router_id }}
  bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+{% for n in bgp.neighbors %}
+ neighbor {{ n.neighbor_ip }} remote-as {{ n.remote_as }}
+ neighbor {{ n.neighbor_ip }} description RR_VPNV4_to_{{ n.neighbor_name }}
+ neighbor {{ n.neighbor_ip }} update-source Loopback0
+{% endfor %}
  !
- {% for neighbor in neighbors %}
- neighbor {{ neighbor.ip }} remote-as {{ neighbor.asn }}
- neighbor {{ neighbor.ip }} description to_{{ neighbor.name }}_{{ neighbor.relationship|default('peer') }}
- {% if neighbor.is_ibgp %}
- neighbor {{ neighbor.ip }} update-source Loopback0
- {% endif %}
- {% endfor %}
- !
- address-family ipv4
- {% for neighbor in neighbors %}
-  neighbor {{ neighbor.ip }} activate
-  {% if neighbor.is_ibgp %}
-  neighbor {{ neighbor.ip }} next-hop-self
-  {% endif %}
-  {% if options.policies_enabled %}
-   neighbor {{ neighbor.ip }} send-community
-   {% if not neighbor.is_ibgp %}
-   neighbor {{ neighbor.ip }} route-map MAP_FROM_{{ neighbor.relationship|upper }} in
-   neighbor {{ neighbor.ip }} route-map MAP_TO_{{ neighbor.relationship|upper }} out
-   {% endif %}
-  {% endif %}
- {% endfor %}
- {% if networks %}
-  ! Networks to advertise
-  {% for net in networks %}
-    network {{ net.network }} mask {{ net.mask }}
-  {% endfor %}
- {% endif %}
-  network {{ loopback_ip }} mask 255.255.255.255
-  redistribute connected
-  {% if options.secure_redist %}
-  redistribute ospf 1 route-map OSPF_TO_BGP
-  {% else %}
-  redistribute ospf 1
-  {% endif %}
+ address-family vpnv4
+{% for n in bgp.neighbors %}
+	neighbor {{ n.neighbor_ip }} activate
+	neighbor {{ n.neighbor_ip }} send-community both
+{% if n.is_rr_client %}
+	neighbor {{ n.neighbor_ip }} route-reflector-client
+{% endif %}
+{% endfor %}
  exit-address-family
 !
-  {% endif %}
-{% if options.secure_redist %}
-  {% if options.enable_bgp %}
-! Route-map to tag BGP routes redist into OSPF
-route-map BGP_TO_OSPF permit 10
- set tag {{ asn }}
-!
-! Route-map to filter OSPF routes (deny tagged routes)
-route-map OSPF_TO_BGP deny 10
- match tag {{ asn }}
-!
-route-map OSPF_TO_BGP permit 20
-!
 {% endif %}
-{% endif %}
-{% if options.policies_enabled %}
-!
-! --- GAO-REXFORD POLICIES ---
-! Community Definitions
-ip bgp-community new-format
-!
-! community-lists
-ip community-list standard FROM_CUSTOMER permit {{ asn }}:10
-ip community-list standard FROM_PEER     permit {{ asn }}:20
-ip community-list standard FROM_PROVIDER permit {{ asn }}:30
-
-! Prefix-lists (SELF): allow ping without specifying source
-ip prefix-list PL_SELF_AS{{ asn }} seq 10 permit 10.0.0.0/8 le 32
-!
-! INBOUND POLICIES (Prefer Customer > Peer > Provider)
-route-map MAP_FROM_CUSTOMER permit 10
- set local-preference 200
- set community {{ asn }}:10
-!
-route-map MAP_FROM_PEER permit 10
- set local-preference 100
- set community {{ asn }}:20
-!
-route-map MAP_FROM_PROVIDER permit 10
- set local-preference 50
- set community {{ asn }}:30
-!
-! OUTBOUND POLICIES (Valley-Free Rule)
-route-map MAP_TO_CUSTOMER permit 10
-!
-route-map MAP_TO_PEER permit 10
- match community FROM_CUSTOMER
-route-map MAP_TO_PEER permit 20
- match ip address prefix-list PL_SELF_AS{{ asn }}
-!
-route-map MAP_TO_PROVIDER permit 10
- match community FROM_CUSTOMER
-route-map MAP_TO_PROVIDER permit 20
- match ip address prefix-list PL_SELF_AS{{ asn }}
-!
-{% endif %}
-end
 write memory

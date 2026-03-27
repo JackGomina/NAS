@@ -20,10 +20,13 @@ from gen_config_bgp_ospf.bgp_ospf_gen import generate_bgp_configs as gen_ospf
 from injection_cfgs.injection_cfgs import injection_cfg
 
 
-def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_strategy="grand_reseaux", advanced_options={}):
+def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_strategy="grand_reseaux", advanced_options=None):
     """
     Exécute la logique d'automatisation avec les paramètres fournis.
     """
+
+    if advanced_options is None:
+        advanced_options = {}
 
     gns3_file = Path(gns3_file_path)
     project_dir = gns3_file.parent
@@ -49,7 +52,8 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
         output_name="topology.json",
         loopback_format=loopback_format,
         routing_strategy=routing_strategy,
-        as_prefixes=advanced_options.get("as_prefixes", {})
+        as_prefixes=advanced_options.get("as_prefixes", {}),
+        role_overrides=advanced_options.get("role_overrides", {})
     )
     
     if topo_data is None:
@@ -65,7 +69,7 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
     if OUTPUT_CONFIGS_DIR.exists(): shutil.rmtree(OUTPUT_CONFIGS_DIR) 
     OUTPUT_CONFIGS_DIR.mkdir(exist_ok=True)
     
-    print("  -> Génération OSPF...")
+    print("  -> Génération des configurations d'adressage...")
     gen_ospf(TOPOLOGY_JSON, output_dir=OUTPUT_CONFIGS_DIR, options=advanced_options)
     
     # 3. VERIFICATION DU NOMBRE DE CONFIGURATIONS
@@ -75,6 +79,118 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
         print(f"  [AVERTISSEMENT] Nombre de configurations générées ({count}) ne correspond pas au nombre de routeurs dans la topologie ({len(topo_data.get('routers', []))}).")
     else:
         print(f"  Nombre de configurations générées : {count}")
+
+    # 3b. Validation phase 0 OSPF (P/PE uniquement)
+    print("\n[3b] Validation OSPF phase 0...")
+    missing_ospf = []
+    unexpected_ospf = []
+    for r in topo_data.get("routers", []):
+        role = str(r.get("role", "UNKNOWN")).upper()
+        cfg_path = OUTPUT_CONFIGS_DIR / f"{r.get('name')}.cfg"
+        if not cfg_path.exists():
+            continue
+        cfg_text = cfg_path.read_text(encoding="utf-8")
+        has_ospf = "router ospf" in cfg_text
+        expected_ospf = role in {"P", "PE", "RR"}
+        if expected_ospf and not has_ospf:
+            missing_ospf.append(r.get("name"))
+        if (not expected_ospf) and has_ospf:
+            unexpected_ospf.append(r.get("name"))
+
+    if not missing_ospf and not unexpected_ospf:
+        print("  Validation OSPF OK: roles et configuration cohérents.")
+    else:
+        if missing_ospf:
+            print(f"  [AVERTISSEMENT] OSPF absent sur: {', '.join(missing_ospf)}")
+        if unexpected_ospf:
+            print(f"  [AVERTISSEMENT] OSPF non attendu sur: {', '.join(unexpected_ospf)}")
+
+    # 3c. Validation phase 1 MPLS/LDP (P/PE uniquement)
+    print("\n[3c] Validation MPLS/LDP phase 1...")
+    missing_mpls_global = []
+    unexpected_mpls_global = []
+    missing_mpls_iface = []
+
+    provider_roles = {"P", "PE", "RR"}
+    router_roles = {
+        r.get("name"): str(r.get("role", "UNKNOWN")).upper()
+        for r in topo_data.get("routers", [])
+    }
+
+    expected_mpls_ifaces = {}
+    for link in topo_data.get("links", []):
+        a = link.get("a")
+        b = link.get("b")
+        role_a = router_roles.get(a, "UNKNOWN")
+        role_b = router_roles.get(b, "UNKNOWN")
+        if role_a in provider_roles and role_b in provider_roles:
+            expected_mpls_ifaces.setdefault(a, set()).add(link.get("a_iface"))
+            expected_mpls_ifaces.setdefault(b, set()).add(link.get("b_iface"))
+
+    for r in topo_data.get("routers", []):
+        router_name = r.get("name")
+        role = router_roles.get(router_name, "UNKNOWN")
+        cfg_path = OUTPUT_CONFIGS_DIR / f"{router_name}.cfg"
+        if not cfg_path.exists():
+            continue
+
+        cfg_text = cfg_path.read_text(encoding="utf-8")
+        has_ldp_global = "mpls ldp router-id Loopback0 force" in cfg_text
+
+        if role in provider_roles and not has_ldp_global:
+            missing_mpls_global.append(router_name)
+        if role not in provider_roles and has_ldp_global:
+            unexpected_mpls_global.append(router_name)
+
+        for iface in expected_mpls_ifaces.get(router_name, set()):
+            iface_block = f"interface {iface}\n"
+            iface_pos = cfg_text.find(iface_block)
+            if iface_pos == -1:
+                missing_mpls_iface.append(f"{router_name}:{iface} (interface absente)")
+                continue
+            next_iface_pos = cfg_text.find("\ninterface ", iface_pos + len(iface_block))
+            block = cfg_text[iface_pos:] if next_iface_pos == -1 else cfg_text[iface_pos:next_iface_pos]
+            if " mpls ip" not in block:
+                missing_mpls_iface.append(f"{router_name}:{iface}")
+
+    if not missing_mpls_global and not unexpected_mpls_global and not missing_mpls_iface:
+        print("  Validation MPLS/LDP OK: rôles et interfaces cœur cohérents.")
+    else:
+        if missing_mpls_global:
+            print(f"  [AVERTISSEMENT] LDP global absent sur: {', '.join(missing_mpls_global)}")
+        if unexpected_mpls_global:
+            print(f"  [AVERTISSEMENT] LDP global non attendu sur: {', '.join(unexpected_mpls_global)}")
+        if missing_mpls_iface:
+            print(f"  [AVERTISSEMENT] MPLS manquant sur interfaces coeur: {', '.join(missing_mpls_iface)}")
+
+    # 3d. Validation phase 2 BGP vpnv4 (PE/RR uniquement)
+    print("\n[3d] Validation BGP vpnv4 phase 2...")
+    missing_vpnv4 = []
+    unexpected_vpnv4 = []
+
+    for r in topo_data.get("routers", []):
+        router_name = r.get("name")
+        role = str(r.get("role", "UNKNOWN")).upper()
+        cfg_path = OUTPUT_CONFIGS_DIR / f"{router_name}.cfg"
+        if not cfg_path.exists():
+            continue
+
+        cfg_text = cfg_path.read_text(encoding="utf-8")
+        has_vpnv4 = "address-family vpnv4" in cfg_text
+        expected_vpnv4 = role in {"PE", "RR"}
+
+        if expected_vpnv4 and not has_vpnv4:
+            missing_vpnv4.append(router_name)
+        if (not expected_vpnv4) and has_vpnv4:
+            unexpected_vpnv4.append(router_name)
+
+    if not missing_vpnv4 and not unexpected_vpnv4:
+        print("  Validation BGP vpnv4 OK: présence cohérente sur PE/RR.")
+    else:
+        if missing_vpnv4:
+            print(f"  [AVERTISSEMENT] vpnv4 absent sur: {', '.join(missing_vpnv4)}")
+        if unexpected_vpnv4:
+            print(f"  [AVERTISSEMENT] vpnv4 non attendu sur: {', '.join(unexpected_vpnv4)}")
     
     # 4. INJECTION DANS GNS3
     print("\n[4/4] Injection dans le projet GNS3...")
@@ -108,19 +224,22 @@ def show_tutorial(root):
     )).pack(anchor="w")
 
     # --- ETAPE 2 : LES RECTANGLES ---
-    step1 = ttk.LabelFrame(main_frame, text="2. Définir les Protocoles et AS", padding=5)
+    step1 = ttk.LabelFrame(main_frame, text="2. Définir les Zones AS", padding=5)
     step1.pack(fill=tk.X, pady=5)
     
     tk.Label(step1, justify=tk.LEFT, wraplength=550, text=(
         "Utilisez l'outil 'Draw Rectangle' pour définir les zones.\n"
-        "La couleur de BORDURE définit le protocole :"
+        "Chaque rectangle vert correspond a un AS (ordre de dessin = numerotation AS).\n"
+        "Un rectangle noir est auto-suffisant pour definir l'AS FAI principal (meme sans vert)."
     )).pack(anchor="w")
     
     f_colors = ttk.Frame(step1)
     f_colors.pack(fill=tk.X, pady=2)
     
     tk.Label(f_colors, text="      ●  ", fg="#00FF00", font=("Arial", 14)).pack(side=tk.LEFT)
-    tk.Label(f_colors, text="VERT = OSPF", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+    tk.Label(f_colors, text="VERT = Zone AS", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+    tk.Label(f_colors, text="      ●  ", fg="#000000", font=("Arial", 14)).pack(side=tk.LEFT)
+    tk.Label(f_colors, text="NOIR = AS FAI principal", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
 
     # --- ETAPE 3 : ARRIERE PLAN ---
     step2 = ttk.LabelFrame(main_frame, text="3. IMPORTANT : Arrière-plan", padding=5)
@@ -212,10 +331,48 @@ def main_gui():
     
     config_results = {}
 
+    preview_routers = sorted(topo_preview.get("routers", []), key=lambda r: r.get("name", "")) if sorted_as_list else []
+    detected_role_map = {r.get("name"): r.get("role", "UNKNOWN") for r in preview_routers}
+
     config_win = tk.Toplevel(root)
     config_win.title("Configuration du Réseau")
-    config_win.geometry("500x650")
+    config_win.geometry("760x760")
     config_win.grab_set()
+
+    # Section 0: Validation des roles detectes
+    lf_roles = ttk.LabelFrame(config_win, text="0. Rôles routeurs (auto depuis .gns3)", padding=10)
+    lf_roles.pack(fill="x", padx=10, pady=10)
+
+    ttk.Label(
+        lf_roles,
+        text=(
+            "Règle auto: bordure + AS FAI => PE, coeur FAI => P, bordure client => CE.\n"
+            "Vous pouvez corriger manuellement si nécessaire."
+        )
+    ).pack(anchor="w")
+
+    role_vars = {}
+    if preview_routers:
+        for r in preview_routers:
+            router_name = r.get("name", "?")
+            asn = r.get("as_number", "?")
+            as_type = r.get("as_type", "unknown")
+
+            row = ttk.Frame(lf_roles)
+            row.pack(fill="x", pady=2)
+
+            ttk.Label(row, text=f"{router_name} (AS {asn}, {as_type})", width=38).pack(side="left")
+            role_var = tk.StringVar(value=r.get("role", "UNKNOWN"))
+            role_vars[router_name] = role_var
+            ttk.Combobox(
+                row,
+                textvariable=role_var,
+                values=["PE", "P", "RR", "CE", "C", "UNKNOWN"],
+                state="readonly",
+                width=12
+            ).pack(side="left")
+    else:
+        ttk.Label(lf_roles, text="Aucun routeur détecté.", foreground="red").pack(anchor="w")
 
     # Section 1: Adressage
     lf_addr = ttk.LabelFrame(config_win, text="1. Adressage ip", padding=10)
@@ -304,320 +461,12 @@ def main_gui():
             }
 
         config_results["as_prefixes"] = as_prefixes_cfg
-        config_results["enable_bgp"] = var_enable_bgp.get()
-        config_results["enable_policies"] = var_policies.get()
-        config_results["enable_metrics"] = var_metrics.get()
-        config_results["secure_redist"] = var_redist.get()
-        config_results["bgp_policies"] = bgp_relations
-        config_results["ospf_costs"] = ospf_costs
+        config_results["role_overrides"] = {
+            name: var.get()
+            for name, var in role_vars.items()
+            if var.get() != detected_role_map.get(name, "UNKNOWN")
+        }
         config_win.destroy()
-
-    # Section 2: Options Avancées (Policies)
-    lf_advanced = ttk.LabelFrame(config_win, text="2. Options Avancées", padding=10)
-    lf_advanced.pack(fill="x", padx=10, pady=10)
-
-    # 2a. BGP legacy (désactivé par défaut pour les phases OSPF/MPLS)
-    var_enable_bgp = tk.BooleanVar(value=False)
-    check_enable_bgp = ttk.Checkbutton(
-        lf_advanced,
-        text="Activer BGP IPv4 legacy (plein maillage iBGP/eBGP)",
-        variable=var_enable_bgp
-    )
-    check_enable_bgp.pack(anchor="w", pady=5)
-    ttk.Label(
-        lf_advanced,
-        text="   (Laisser décoché pour phase OSPF/MPLS sans BGP de service)",
-        font=("Arial", 8, "italic"),
-        foreground="gray"
-    ).pack(anchor="w")
-
-    # 2b. Redistribution Sécurisée
-    var_redist = tk.BooleanVar(value=True)
-    check_redist = ttk.Checkbutton(lf_advanced, text="Activer Redistribution Sécurisée (Route-Maps)", variable=var_redist)
-    check_redist.pack(anchor="w", pady=5)
-    ttk.Label(lf_advanced, text="   (Filtre les routes redistribuées pour éviter les boucles)", font=("Arial", 8, "italic"), foreground="gray").pack(anchor="w")
-
-    # 2c. BGP Policies (Gao-Rexford)
-    var_policies = tk.BooleanVar(value=False)
-    # Store relations: "100-200": "peer", "100-300": "customer" (from 100 pov)
-    bgp_relations = {} 
-
-    def open_relations_window():
-        """
-        Fenêtre pour définir les relations entre AS (Provider/Customer/Peer)
-        """
-        # Si une fenêtre existe déjà, on ne fait rien (ou on la met au premier plan)
-        # Ici on utilise grab_set (modal) donc le bouton sera de toute façon inactif tant que la fenêtre est ouverte.
-        
-        rel_win = tk.Toplevel(config_win)
-        rel_win.title("Relations BGP")
-        rel_win.geometry("600x450")
-        
-        # Rendre la fenêtre modale (bloque la fenêtre parent) et au premier plan
-        rel_win.transient(config_win)
-        rel_win.grab_set()
-        rel_win.focus_set()
-        
-        # Info Panel : AS Detected
-        lf_info = ttk.LabelFrame(rel_win, text="AS Détectés", padding=5)
-        lf_info.pack(fill="x", padx=10, pady=5)
-        lbl_as_list = tk.Label(lf_info, text="AS trouvés : " + ", ".join(sorted_as_list), fg="blue")
-        lbl_as_list.pack(anchor="w")
-        
-        # Details Routers
-        frame_list = ttk.Frame(lf_info)
-        frame_list.pack(fill="x", pady=2)
-
-        # Regroupement par AS pour affichage clair
-        as_groups = {}
-        if 'topo_preview' in locals() and topo_preview:
-             for r in topo_preview.get("routers", []):
-                asn = str(r.get("as_number", ""))
-                if asn:
-                    as_groups.setdefault(asn, []).append(r["name"])
-        
-        display_lines = []
-        for asn in sorted(as_groups.keys(), key=lambda x: int(x) if x.isdigit() else 999999):
-            routers_str = ", ".join(sorted(as_groups[asn]))
-            display_lines.append(f"- AS {asn} : {routers_str}")
-
-        full_text = "\n".join(display_lines) if display_lines else "Aucun routeur détecté."
-
-        lbl_r_map = tk.Label(frame_list, text=full_text, font=("Consolas", 9), justify="left", fg="#333333")
-        lbl_r_map.pack(anchor="w", padx=5)
-
-        ttk.Label(rel_win, text="Définissez les relations (A vers B)", font=("Arial", 10, "bold")).pack(pady=10)
-        
-        frame_input = ttk.Frame(rel_win)
-        frame_input.pack(pady=5)
-        
-        ttk.Label(frame_input, text="AS A :").grid(row=0, column=0)
-        # Use Combobox populated with detected AS
-        cb_asa = ttk.Combobox(frame_input, values=sorted_as_list, width=8)
-        cb_asa.grid(row=0, column=1, padx=5)
-        
-        ttk.Label(frame_input, text=" est le ").grid(row=0, column=2)
-        cb_rel = ttk.Combobox(frame_input, values=["peer", "provider", "customer"], state="readonly", width=10)
-        cb_rel.set("peer")
-        cb_rel.grid(row=0, column=3, padx=5)
-        
-        ttk.Label(frame_input, text=" de AS B :").grid(row=0, column=4)
-        cb_asb = ttk.Combobox(frame_input, values=sorted_as_list, width=8)
-        cb_asb.grid(row=0, column=5, padx=5)
-        
-        list_box = tk.Listbox(rel_win, width=70, height=8)
-        list_box.pack(pady=10)
-        
-        def update_listbox():
-            list_box.delete(0, tk.END)
-            for key, rel in bgp_relations.items():
-                as1, as2 = key.split("-")
-                if rel == "provider":
-                    desc = f"AS {as1} est le FOURNISSEUR de AS {as2}"
-                elif rel == "customer":
-                    desc = f"AS {as1} est le CLIENT de AS {as2}"
-                else:
-                    desc = f"AS {as1} est le PAIR (Peer) de AS {as2}"
-                list_box.insert(tk.END, desc)
-
-        def add_rel():
-            as_a = cb_asa.get().strip()
-            as_b = cb_asb.get().strip()
-            rel = cb_rel.get()
-            
-            if not as_a or not as_b:
-                messagebox.showerror("Erreur", "Veuillez sélectionner des AS.")
-                return
-            
-            if as_a == as_b:
-                messagebox.showerror("Erreur", "Impossible de définir une relation sur le même AS.")
-                return
-
-            # Nettoyage des relations existantes pour cette paire (sens direct ou inverse)
-            key_direct = f"{as_a}-{as_b}"
-            key_reverse = f"{as_b}-{as_a}"
-            
-            if key_direct in bgp_relations:
-                del bgp_relations[key_direct]
-            if key_reverse in bgp_relations:
-                del bgp_relations[key_reverse]
-
-            bgp_relations[key_direct] = rel
-            update_listbox()
-
-        def delete_rel():
-            selection = list_box.curselection()
-            if not selection:
-                return
-            
-            item_text = list_box.get(selection[0])
-            # Retrouver la clé via le texte (un peu hacky mais simple ici) or rebuild key logic
-            # On parcourt le dictionnaire pour trouver la correspondance
-            key_to_del = None
-            for key, rel in bgp_relations.items():
-                as1, as2 = key.split("-")
-                # On recrée la string pour comparer
-                if rel == "provider":
-                    desc = f"AS {as1} est le FOURNISSEUR de AS {as2}"
-                elif rel == "customer":
-                    desc = f"AS {as1} est le CLIENT de AS {as2}"
-                else:
-                    desc = f"AS {as1} est le PAIR (Peer) de AS {as2}"
-                
-                if desc == item_text:
-                    key_to_del = key
-                    break
-            
-            if key_to_del:
-                del bgp_relations[key_to_del]
-                update_listbox()
-
-        # Frame pour les boutons
-        frame_btns = ttk.Frame(rel_win)
-        frame_btns.pack(pady=5)
-        
-        ttk.Button(frame_input, text="Ajouter / Mettre à jour", command=add_rel).grid(row=0, column=6, padx=10)
-        ttk.Button(rel_win, text="Supprimer sélection", command=delete_rel).pack(pady=2)
-
-        # Initialiser la liste si des relations existent déjà
-        update_listbox()
-
-        ttk.Button(rel_win, text="Valider & Fermer", command=rel_win.destroy).pack(side=tk.BOTTOM, pady=10)
-
-
-    def toggle_policies_options():
-        if var_policies.get():
-            btn_config_rels.config(state="normal")
-            lbl_pol_info.config(text="Cliquez sur 'Configurer Relations' pour définir qui est client/fournisseur.", foreground="blue")
-        else:
-            btn_config_rels.config(state="disabled")
-            lbl_pol_info.config(text="Mode simple: Tout le monde est 'Peer' (eBGP standard).", foreground="gray")
-
-    check_policies = ttk.Checkbutton(lf_advanced, text="Activer Politiques BGP (Gao-Rexford)", variable=var_policies, command=toggle_policies_options)
-    check_policies.pack(anchor="w", pady=(15, 5))
-    
-    lbl_pol_info = ttk.Label(lf_advanced, text="Mode simple: Tout le monde est 'Peer' (eBGP standard).", font=("Arial", 8, "italic"), foreground="gray")
-    lbl_pol_info.pack(anchor="w", padx=20)
-
-    btn_config_rels = ttk.Button(lf_advanced, text="Configurer Relations...", state="disabled", command=open_relations_window) 
-    btn_config_rels.pack(anchor="w", padx=20, pady=5)
-
-    # 2d. OSPF Metrics
-    var_metrics = tk.BooleanVar(value=False)
-    # { "R1": { "Gi1/0": 10 } }
-    ospf_costs = {} 
-
-    def open_metrics_window():
-        met_win = tk.Toplevel(config_win)
-        met_win.title("Métriques OSPF - Tableau des Coûts")
-        met_win.geometry("700x500")
-        met_win.transient(config_win)
-        met_win.grab_set()
-
-        ttk.Label(met_win, text="Tableau des Coûts OSPF (Défaut: 10)", font=("Arial", 10, "bold")).pack(pady=10)
-
-        # Container for the canvas and scrollbar
-        container = ttk.Frame(met_win)
-        container.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        canvas = tk.Canvas(container)
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # Pour activer le scroll avec la molette souris
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind_all("<MouseWheel>", on_mousewheel)
-
-        # Headers
-        ttk.Label(scrollable_frame, text="Lien (Connexion)", font=("Arial", 9, "bold")).grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        ttk.Label(scrollable_frame, text="Coût", font=("Arial", 9, "bold")).grid(row=0, column=1, padx=5, pady=5, sticky="w")
-
-        # Data
-        links_data = topo_preview.get("links", []) if topo_preview else []
-        link_entries = [] # To store (link_obj, entry_widget)
-
-        for i, link in enumerate(links_data):
-            rA, ifA = link["a"], link["a_iface"]
-            rB, ifB = link["b"], link["b_iface"]
-            
-            label_text = f"{rA} <--> {rB} ({ifA}) ({ifB})"
-            
-            # Check if there is already a cost defined in ospf_costs for rA side
-            current_cost = 10
-            if rA in ospf_costs and ifA in ospf_costs[rA]:
-                current_cost = ospf_costs[rA][ifA]
-            
-            lbl = ttk.Label(scrollable_frame, text=label_text)
-            lbl.grid(row=i+1, column=0, padx=5, pady=2, sticky="w")
-            
-            ent = ttk.Entry(scrollable_frame, width=10)
-            ent.insert(0, str(current_cost))
-            ent.grid(row=i+1, column=1, padx=5, pady=2)
-            
-            link_entries.append((link, ent))
-            
-        def save_metrics():
-            # Reset
-            ospf_costs.clear()
-            
-            error_flag = False
-            for link, ent in link_entries:
-                try:
-                    val = int(ent.get())
-                except ValueError:
-                    error_flag = True
-                    break
-                
-                # Apply symmetry
-                rA, ifA = link["a"], link["a_iface"]
-                rB, ifB = link["b"], link["b_iface"]
-                
-                if rA not in ospf_costs: ospf_costs[rA] = {}
-                if rB not in ospf_costs: ospf_costs[rB] = {}
-                
-                # Default is 10, only store if different? Or store everything to be explicit.
-                # Storing everything is safer for the generator logic.
-                ospf_costs[rA][ifA] = val
-                ospf_costs[rB][ifB] = val
-            
-            if error_flag:
-                messagebox.showerror("Erreur", "Tous les coûts doivent être des entiers valides.")
-                return
-
-            # Cleanup bindings
-            canvas.unbind_all("<MouseWheel>")
-            met_win.destroy()
-
-        ttk.Button(met_win, text="Enregistrer & Fermer", command=save_metrics).pack(pady=10)
-
-    def toggle_metrics_options():
-        if var_metrics.get():
-            btn_config_met.config(state="normal")
-            lbl_met_info.config(text="Cliquez sur 'Configurer Coûts OSPF' pour définir les métriques manuellement.", foreground="blue")
-        else:
-            btn_config_met.config(state="disabled")
-            lbl_met_info.config(text="Mode automatique : Coûts par défaut (10).", foreground="gray")
-
-    check_metrics = ttk.Checkbutton(lf_advanced, text="Activer Optimisation Métriques OSPF", variable=var_metrics, command=toggle_metrics_options)
-    check_metrics.pack(anchor="w", pady=(15, 5))
-    
-    lbl_met_info = ttk.Label(lf_advanced, text="Mode automatique : Coûts par défaut (10).", font=("Arial", 8, "italic"), foreground="gray")
-    lbl_met_info.pack(anchor="w", padx=20)
-
-    btn_config_met = ttk.Button(lf_advanced, text="Configurer Coûts OSPF...", state="disabled", command=open_metrics_window)
-    btn_config_met.pack(anchor="w", padx=20, pady=5)
 
     # Bouton Valider
     ttk.Button(config_win, text="Valider & Lancer", command=submit_config).pack(side="bottom", pady=20)
@@ -634,21 +483,12 @@ def main_gui():
     routing_strategy = "grand_reseaux"
 
     # 3. Lancer le traitement
-    print(
-        f"Options choisies : BGP={config_results['enable_bgp']}, "
-        f"Policies={config_results['enable_policies']}, "
-        f"Metrics={config_results['enable_metrics']}, "
-        f"Redist={config_results['secure_redist']}"
-    )
+    print("Options choisies : adressage par AS + validation des rôles")
     
     # Construction du dictionnaire d'options
     advanced_options = {
-        "enable_bgp": config_results["enable_bgp"],
-        "secure_redist": config_results["secure_redist"],
-        "policies_enabled": config_results["enable_policies"],
-        "bgp_relations": config_results.get("bgp_policies", {}),
-        "ospf_costs": config_results.get("ospf_costs", {}),
-        "as_prefixes": config_results.get("as_prefixes", {})
+        "as_prefixes": config_results.get("as_prefixes", {}),
+        "role_overrides": config_results.get("role_overrides", {})
     }
     
     success, message = run_automation(file_path, ip_base, loopback_choice, routing_strategy, advanced_options)

@@ -15,6 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 COLOR_TO_PROTOCOL = {
     "00ff00": "OSPF"     # Vert
 }
+PROVIDER_RECT_COLORS = {"000000"}
 
 # --- FONCTION UTILITAIRE : Traduction GNS3 -> Cisco ---
 def get_interface_name(adapter, port):
@@ -33,11 +34,12 @@ def get_interface_name(adapter, port):
 def extract_drawings(gns3_data):
     """
     Extrait les rectangles de dessins du projet GNS3.
-    Retourne une liste de dictionnaires avec: x, y, width, height, color, protocol, as_number
-    Assigne les numéros d'AS croissants: 1, 2, 3...
+    - Rectangles verts: zones AS (numérotées)
+    - Rectangles noirs: zones AS provider (auto-suffisantes)
     """
     drawings = gns3_data.get("topology", {}).get("drawings", [])
-    rectangles = []
+    as_rectangles = []
+    provider_rectangles = []
     as_counter = 1
     
     for drawing in drawings:
@@ -58,23 +60,35 @@ def extract_drawings(gns3_data):
             width = int(width_match.group(1))
             height = int(height_match.group(1))
             color = color_match.group(1) if color_match else "000000"
-            protocol = COLOR_TO_PROTOCOL.get(color.lower(), "UNKNOWN")
-            
+            color_lower = color.lower()
+
             rect = {
                 "x": drawing["x"],
                 "y": drawing["y"],
                 "width": width,
                 "height": height,
-                "color": color,
-                "protocol": protocol
+                "color": color
             }
-            
-            rect["as_number"] = as_counter
-            as_counter += 1
 
-            rectangles.append(rect)
-    
-    return rectangles
+            if color_lower in COLOR_TO_PROTOCOL:
+                rect["protocol"] = COLOR_TO_PROTOCOL[color_lower]
+                rect["as_number"] = as_counter
+                rect["is_provider_zone"] = False
+                as_counter += 1
+                as_rectangles.append(rect)
+            elif color_lower in PROVIDER_RECT_COLORS:
+                # Un rectangle noir est aussi une zone AS OSPF utilisable seule.
+                rect["protocol"] = "OSPF"
+                rect["as_number"] = as_counter
+                rect["is_provider_zone"] = True
+                as_counter += 1
+                as_rectangles.append(rect)
+                provider_rectangles.append(rect)
+
+    return {
+        "as_rectangles": as_rectangles,
+        "provider_rectangles": provider_rectangles
+    }
 
 
 def is_point_in_rectangle(px, py, rect):
@@ -107,6 +121,11 @@ def assign_routers_to_as(nodes_data, rectangles):
         
         # Trouver les rectangles contenant ce routeur
         containing_rects = [r for r in rectangles if is_point_in_rectangle(x, y, r)]
+
+        # Priorité aux zones provider (rectangles noirs) si chevauchement.
+        provider_containing = [r for r in containing_rects if r.get("is_provider_zone")]
+        if provider_containing:
+            containing_rects = provider_containing
         
         # Valeurs par défaut
         protocol = "UNKNOWN"
@@ -132,6 +151,18 @@ def assign_routers_to_as(nodes_data, rectangles):
     return router_to_as
 
 
+def find_routers_in_rectangles(nodes_data, rectangles):
+    routers = set()
+    for node in nodes_data:
+        if node.get("node_type") != "dynamips":
+            continue
+
+        x, y = node["x"], node["y"]
+        if any(is_point_in_rectangle(x, y, rect) for rect in rectangles):
+            routers.add(node["name"])
+    return routers
+
+
 # --- FONCTION PRINCIPALE ---
 def get_topology(
     gns3_file,
@@ -140,7 +171,8 @@ def get_topology(
     output_name="topology.json",
     loopback_format="simple",
     routing_strategy="grand_reseaux",
-    as_prefixes=None
+    as_prefixes=None,
+    role_overrides=None
 ):
     """
     Extrait la topologie d'un fichier .gns3 et génère un fichier topology.json
@@ -164,6 +196,12 @@ def get_topology(
         dict: Les données de topologie extraites
     """
     
+    # Valeurs par défaut
+    if as_prefixes is None:
+        as_prefixes = {}
+    if role_overrides is None:
+        role_overrides = {}
+
     # Configuration des chemins
     if output_dir is None:
         output_dir = Path(__file__).parent.absolute()
@@ -195,20 +233,23 @@ def get_topology(
     print(f"Nombre de liens trouvés : {len(links_data)}")
 
     # Extraire les rectangles (AS/groupes)
-    rectangles = extract_drawings(gns3_data)
-    print(f"Nombre de rectangles détectés : {len(rectangles)}")
-    for i, rect in enumerate(rectangles):
+    drawings_info = extract_drawings(gns3_data)
+    as_rectangles = drawings_info["as_rectangles"]
+    provider_rectangles = drawings_info["provider_rectangles"]
+
+    print(f"Nombre de rectangles AS détectés : {len(as_rectangles)}")
+    for i, rect in enumerate(as_rectangles):
         print(f"  AS{rect['as_number']}: {rect['protocol']} ({rect['color']}) à ({rect['x']}, {rect['y']}), taille {rect['width']}x{rect['height']}")
-    
+    print(f"Nombre de rectangles provider détectés : {len(provider_rectangles)}")
+
     # Assigner les routeurs aux AS
-    router_to_as = assign_routers_to_as(nodes_data, rectangles)
-    print(f"Attribution routeurs -> AS:")
-    for router, as_info in router_to_as.items():
-        as_num = as_info.get("as_number", "?")
-        protocol = as_info.get("protocol", "?")
-        print(f"  {router}: AS{as_num} ({protocol})")
+    router_to_as = assign_routers_to_as(nodes_data, as_rectangles)
+    provider_routers = find_routers_in_rectangles(nodes_data, provider_rectangles)
 
     for node in nodes_data:
+        if node.get("node_type") != "dynamips":
+            continue
+
         name = node["name"]
         node_id = node["node_id"]
         id_to_name[node_id] = name
@@ -255,13 +296,77 @@ def get_topology(
             router_to_as[a] = a_info
             router_to_as[b] = b_info
 
+    # --- 2c. DETECTION DES TYPES D'AS ET ROLES (PE/P/CE/C) ---
+    as_type_by_number = {}
+    for router_name, as_info in router_to_as.items():
+        asn = as_info.get("as_number")
+        if asn is None:
+            continue
+        as_key = str(asn)
+        if as_key not in as_type_by_number:
+            as_type_by_number[as_key] = "customer"
+        if router_name in provider_routers:
+            as_type_by_number[as_key] = "provider"
+
+    border_routers = set()
+    for link in links:
+        a = link["a"]
+        b = link["b"]
+        a_as = router_to_as.get(a, {}).get("as_number")
+        b_as = router_to_as.get(b, {}).get("as_number")
+        if a_as is not None and b_as is not None and a_as != b_as:
+            border_routers.add(a)
+            border_routers.add(b)
+
+    for router_name, as_info in router_to_as.items():
+        asn = as_info.get("as_number")
+        if asn is None:
+            as_info["as_type"] = "unknown"
+            as_info["role"] = "UNKNOWN"
+            router_to_as[router_name] = as_info
+            continue
+
+        as_type = as_type_by_number.get(str(asn), "customer")
+        is_border = router_name in border_routers
+
+        if is_border and as_type == "provider":
+            role = "PE"
+        elif not is_border and as_type == "provider":
+            role = "P"
+        elif is_border and as_type == "customer":
+            role = "CE"
+        else:
+            role = "C"
+
+        # Critère auto RR: routeur provider dont le nom contient "RR".
+        # Exemples: RR1, CORE-RR2, RRX.
+        if as_type == "provider" and "RR" in str(router_name).upper():
+            role = "RR"
+
+        as_info["as_type"] = as_type
+        as_info["role"] = role
+        router_to_as[router_name] = as_info
+
+    allowed_roles = {"PE", "P", "RR", "CE", "C", "UNKNOWN"}
+    for router_name, forced_role in role_overrides.items():
+        if router_name not in router_to_as:
+            continue
+        forced = str(forced_role).upper()
+        if forced in allowed_roles:
+            router_to_as[router_name]["role"] = forced
+
+    print(f"Attribution routeurs -> AS:")
+    for router, as_info in router_to_as.items():
+        as_num = as_info.get("as_number", "?")
+        protocol = as_info.get("protocol", "?")
+        as_type = as_info.get("as_type", "unknown")
+        role = as_info.get("role", "UNKNOWN")
+        print(f"  {router}: AS{as_num} ({protocol}) type={as_type} role={role}")
+
     # --- 3. LOGIQUE D'ADRESSAGE ---
     # Tous les liens sont alloués en /30.
     # - Lien intra-AS: /30 dans le pool du préfixe de l'AS.
     # - Lien inter-AS: /30 dans un pool inter-AS dédié.
-
-    if as_prefixes is None:
-        as_prefixes = {}
 
     interfaces_cfg = defaultdict(list)
     networks = defaultdict(set)
@@ -415,6 +520,8 @@ def get_topology(
             "name": router_name,
             "protocol": as_info.get("protocol"),
             "as_number": as_info.get("as_number"),
+            "as_type": as_info.get("as_type", "unknown"),
+            "role": as_info.get("role", "UNKNOWN"),
             "ebgp": as_info.get("ebgp", False),
             "loopback_ip": loopback_ip,
             "interfaces": interfaces_cfg.get(router_name, []),
