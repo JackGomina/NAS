@@ -53,7 +53,8 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
         loopback_format=loopback_format,
         routing_strategy=routing_strategy,
         as_prefixes=advanced_options.get("as_prefixes", {}),
-        role_overrides=advanced_options.get("role_overrides", {})
+        role_overrides=advanced_options.get("role_overrides", {}),
+        auto_rr_from_name=advanced_options.get("auto_rr_from_name", False)
     )
     
     if topo_data is None:
@@ -191,6 +192,59 @@ def run_automation(gns3_file_path, ip_prefix, loopback_format="simple", routing_
             print(f"  [AVERTISSEMENT] vpnv4 absent sur: {', '.join(missing_vpnv4)}")
         if unexpected_vpnv4:
             print(f"  [AVERTISSEMENT] vpnv4 non attendu sur: {', '.join(unexpected_vpnv4)}")
+
+    # 3e. Validation phase 3 VRF + PE-CE eBGP
+    print("\n[3e] Validation phase 3 (VRF + eBGP PE-CE)...")
+    missing_vrf_on_pe = []
+    missing_pe_ce_ebgp = []
+    missing_ce_bgp = []
+
+    role_map = {
+        r.get("name"): str(r.get("role", "UNKNOWN")).upper()
+        for r in topo_data.get("routers", [])
+    }
+
+    pe_with_ce = set()
+    ce_routers = set()
+    for link in topo_data.get("links", []):
+        a = link.get("a")
+        b = link.get("b")
+        role_a = role_map.get(a, "UNKNOWN")
+        role_b = role_map.get(b, "UNKNOWN")
+        if role_a == "PE" and role_b == "CE":
+            pe_with_ce.add(a)
+            ce_routers.add(b)
+        elif role_b == "PE" and role_a == "CE":
+            pe_with_ce.add(b)
+            ce_routers.add(a)
+
+    for pe_name in sorted(pe_with_ce):
+        cfg_path = OUTPUT_CONFIGS_DIR / f"{pe_name}.cfg"
+        if not cfg_path.exists():
+            continue
+        cfg_text = cfg_path.read_text(encoding="utf-8")
+        if "ip vrf CUST_" not in cfg_text:
+            missing_vrf_on_pe.append(pe_name)
+        if "address-family ipv4 vrf" not in cfg_text:
+            missing_pe_ce_ebgp.append(pe_name)
+
+    for ce_name in sorted(ce_routers):
+        cfg_path = OUTPUT_CONFIGS_DIR / f"{ce_name}.cfg"
+        if not cfg_path.exists():
+            continue
+        cfg_text = cfg_path.read_text(encoding="utf-8")
+        if "router bgp" not in cfg_text:
+            missing_ce_bgp.append(ce_name)
+
+    if not missing_vrf_on_pe and not missing_pe_ce_ebgp and not missing_ce_bgp:
+        print("  Validation phase 3 OK: VRF et eBGP PE-CE présents où attendu.")
+    else:
+        if missing_vrf_on_pe:
+            print(f"  [AVERTISSEMENT] VRF absente sur PE: {', '.join(missing_vrf_on_pe)}")
+        if missing_pe_ce_ebgp:
+            print(f"  [AVERTISSEMENT] eBGP VRF absent sur PE: {', '.join(missing_pe_ce_ebgp)}")
+        if missing_ce_bgp:
+            print(f"  [AVERTISSEMENT] BGP CE absent sur: {', '.join(missing_ce_bgp)}")
     
     # 4. INJECTION DANS GNS3
     print("\n[4/4] Injection dans le projet GNS3...")
@@ -229,17 +283,18 @@ def show_tutorial(root):
     
     tk.Label(step1, justify=tk.LEFT, wraplength=550, text=(
         "Utilisez l'outil 'Draw Rectangle' pour définir les zones.\n"
-        "Chaque rectangle vert correspond a un AS (ordre de dessin = numerotation AS).\n"
-        "Un rectangle noir est auto-suffisant pour definir l'AS FAI principal (meme sans vert)."
+        "Noir strict (#000000) = domaine provider.\n"
+        "Toute autre couleur = client/VRF.\n"
+        "Deux rectangles de même couleur = même client."
     )).pack(anchor="w")
     
     f_colors = ttk.Frame(step1)
     f_colors.pack(fill=tk.X, pady=2)
     
-    tk.Label(f_colors, text="      ●  ", fg="#00FF00", font=("Arial", 14)).pack(side=tk.LEFT)
-    tk.Label(f_colors, text="VERT = Zone AS", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+    tk.Label(f_colors, text="      ●  ", fg="#4fa3d1", font=("Arial", 14)).pack(side=tk.LEFT)
+    tk.Label(f_colors, text="COULEUR = Zone Client", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
     tk.Label(f_colors, text="      ●  ", fg="#000000", font=("Arial", 14)).pack(side=tk.LEFT)
-    tk.Label(f_colors, text="NOIR = AS FAI principal", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+    tk.Label(f_colors, text="NOIR STRICT = Domaine Provider", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
 
     # --- ETAPE 3 : ARRIERE PLAN ---
     step2 = ttk.LabelFrame(main_frame, text="3. IMPORTANT : Arrière-plan", padding=5)
@@ -311,7 +366,11 @@ def main_gui():
     # directement dans topology.json à la racine
     try:
         topo_preview = get_topology(
-            file_path, ip_base="10.0.0.0/8", output_dir=ROOT_DIR, output_name="topology.json"
+            file_path,
+            ip_base="10.0.0.0/8",
+            output_dir=ROOT_DIR,
+            output_name="topology.json",
+            auto_rr_from_name=False
         )
         detected_as = set()
         router_as_map = []
@@ -350,6 +409,13 @@ def main_gui():
             "Vous pouvez corriger manuellement si nécessaire."
         )
     ).pack(anchor="w")
+
+    var_auto_rr = tk.BooleanVar(value=False)
+    ttk.Checkbutton(
+        lf_roles,
+        text="Activer auto-RR par nom (contient 'RR')",
+        variable=var_auto_rr
+    ).pack(anchor="w", pady=(6, 8))
 
     role_vars = {}
     if preview_routers:
@@ -466,6 +532,7 @@ def main_gui():
             for name, var in role_vars.items()
             if var.get() != detected_role_map.get(name, "UNKNOWN")
         }
+        config_results["auto_rr_from_name"] = bool(var_auto_rr.get())
         config_win.destroy()
 
     # Bouton Valider
@@ -488,7 +555,8 @@ def main_gui():
     # Construction du dictionnaire d'options
     advanced_options = {
         "as_prefixes": config_results.get("as_prefixes", {}),
-        "role_overrides": config_results.get("role_overrides", {})
+        "role_overrides": config_results.get("role_overrides", {}),
+        "auto_rr_from_name": config_results.get("auto_rr_from_name", False)
     }
     
     success, message = run_automation(file_path, ip_base, loopback_choice, routing_strategy, advanced_options)

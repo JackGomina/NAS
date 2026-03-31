@@ -6,6 +6,13 @@ mpls label protocol ldp
 mpls ldp router-id Loopback0 force
 {% endif %}
 !
+{% for vrf in vrfs %}
+ip vrf {{ vrf.name }}
+ rd {{ vrf.rd }}
+ route-target export {{ vrf.rt }}
+ route-target import {{ vrf.rt }}
+!
+{% endfor %}
 interface Loopback0
  no ip address
  ip address {{ loopback_ip }} 255.255.255.255
@@ -16,6 +23,9 @@ interface Loopback0
 {% for iface in interfaces %}
 interface {{ iface.name }}
  no ip address
+{% if iface.vrf_name %}
+ ip vrf forwarding {{ iface.vrf_name }}
+{% endif %}
  ip address {{ iface.ip }} {{ iface.mask }}
 {% if iface.ospf_enabled %}
  ip ospf {{ ospf_process_id }} area 0
@@ -32,7 +42,7 @@ router ospf {{ ospf_process_id }}
  passive-interface Loopback0
 !
 {% endif %}
-{% if bgp.enabled %}
+{% if bgp.enabled and bgp.mode == "provider" %}
 router bgp {{ bgp.asn }}
  bgp router-id {{ bgp.router_id }}
  bgp log-neighbor-changes
@@ -46,10 +56,37 @@ router bgp {{ bgp.asn }}
  address-family vpnv4
 {% for n in bgp.neighbors %}
 	neighbor {{ n.neighbor_ip }} activate
-	neighbor {{ n.neighbor_ip }} send-community both
+	neighbor {{ n.neighbor_ip }} send-community extended
 {% if n.is_rr_client %}
 	neighbor {{ n.neighbor_ip }} route-reflector-client
 {% endif %}
+{% endfor %}
+ exit-address-family
+{% for n in bgp.vrf_neighbors %}
+ !
+ address-family ipv4 vrf {{ n.vrf_name }}
+	neighbor {{ n.ce_ip }} remote-as {{ n.ce_asn }}
+	neighbor {{ n.ce_ip }} activate
+	neighbor {{ n.ce_ip }} as-override
+ exit-address-family
+{% endfor %}
+!
+{% endif %}
+{% if bgp.enabled and bgp.mode == "ce" %}
+router bgp {{ bgp.asn }}
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+{% for n in bgp.ce_neighbors %}
+ neighbor {{ n.pe_ip }} remote-as {{ n.pe_asn }}
+ neighbor {{ n.pe_ip }} description CE_to_{{ n.pe_name }}
+{% endfor %}
+ !
+ address-family ipv4
+{% for n in bgp.ce_neighbors %}
+	neighbor {{ n.pe_ip }} activate
+{% endfor %}
+{% for net in bgp.ce_networks %}
+	network {{ net.prefix }} mask {{ net.mask }}
 {% endfor %}
  exit-address-family
 !
