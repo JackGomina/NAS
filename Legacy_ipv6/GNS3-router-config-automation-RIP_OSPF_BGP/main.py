@@ -418,11 +418,14 @@ def main_gui():
     ).pack(anchor="w", pady=(6, 8))
 
     role_vars = {}
+    provider_router_names = set()
     if preview_routers:
         for r in preview_routers:
             router_name = r.get("name", "?")
             asn = r.get("as_number", "?")
             as_type = r.get("as_type", "unknown")
+            if as_type == "provider":
+                provider_router_names.add(router_name)
 
             row = ttk.Frame(lf_roles)
             row.pack(fill="x", pady=2)
@@ -437,6 +440,30 @@ def main_gui():
                 state="readonly",
                 width=12
             ).pack(side="left")
+
+        # Garde-fou UX: si aucun RR n'est défini, promouvoir automatiquement un P en RR.
+        selected_rr = any(str(v.get()).upper() == "RR" for v in role_vars.values())
+        if not selected_rr:
+            preferred_p = next(
+                (
+                    r.get("name")
+                    for r in preview_routers
+                    if r.get("name") in role_vars and str(r.get("as_type", "")).lower() == "provider"
+                    and str(role_vars[r.get("name")].get()).upper() == "P"
+                ),
+                None,
+            )
+            fallback_provider = next(
+                (
+                    r.get("name")
+                    for r in preview_routers
+                    if r.get("name") in role_vars and str(r.get("as_type", "")).lower() == "provider"
+                ),
+                None,
+            )
+            promote_name = preferred_p or fallback_provider
+            if promote_name:
+                role_vars[promote_name].set("RR")
     else:
         ttk.Label(lf_roles, text="Aucun routeur détecté.", foreground="red").pack(anchor="w")
 
@@ -482,6 +509,15 @@ def main_gui():
     def submit_config():
         if not sorted_as_list:
             messagebox.showerror("Erreur", "Aucun AS détecté. Vérifiez les rectangles/AS dans GNS3 puis relancez.")
+            return
+
+        selected_rr_count = sum(
+            1
+            for name in provider_router_names
+            if name in role_vars and str(role_vars[name].get()).upper() == "RR"
+        )
+        if selected_rr_count == 0:
+            messagebox.showerror("Erreur", "Au moins un routeur provider doit être sélectionné en RR.")
             return
 
         as_prefixes_cfg = {}

@@ -5,15 +5,17 @@
     {
       "name": "PE1",
       "protocol": "OSPF",
-      "as_number": 3,
+      "as_number": 65000,
       "as_type": "provider",
+      "customer_id": null,
+      "customer_color": null,
       "role": "PE",
       "ebgp": true,
-      "loopback_ip": "10.255.2.1",
+      "loopback_ip": "10.255.0.1",
       "interfaces": [
         {
           "name": "GigabitEthernet1/0",
-          "ip": "172.16.2.1",
+          "ip": "172.16.0.1",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
@@ -22,93 +24,106 @@
           "ip": "172.31.0.1",
           "prefix": 30,
           "mask": "255.255.255.252"
+        },
+        {
+          "name": "GigabitEthernet2/0",
+          "ip": "172.31.0.10",
+          "prefix": 30,
+          "mask": "255.255.255.252"
         }
       ],
       "networks": [
-        "172.16.2.0/30",
-        "172.31.0.0/30"
+        "172.16.0.0/30",
+        "172.31.0.0/30",
+        "172.31.0.8/30"
       ]
     },
     {
       "name": "P1",
       "protocol": "OSPF",
-      "as_number": 3,
+      "as_number": 65000,
       "as_type": "provider",
-      "role": "P",
+      "customer_id": null,
+      "customer_color": null,
+      "role": "RR",
       "ebgp": false,
-      "loopback_ip": "10.255.2.2",
+      "loopback_ip": "10.255.0.2",
       "interfaces": [
         {
           "name": "GigabitEthernet1/0",
-          "ip": "172.16.2.2",
+          "ip": "172.16.0.2",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
         {
           "name": "GigabitEthernet2/0",
-          "ip": "172.16.2.5",
+          "ip": "172.16.0.5",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
         {
           "name": "GigabitEthernet3/0",
-          "ip": "172.16.2.18",
+          "ip": "172.16.0.18",
           "prefix": 30,
           "mask": "255.255.255.252"
         }
       ],
       "networks": [
-        "172.16.2.0/30",
-        "172.16.2.16/30",
-        "172.16.2.4/30"
+        "172.16.0.0/30",
+        "172.16.0.16/30",
+        "172.16.0.4/30"
       ]
     },
     {
       "name": "P2",
       "protocol": "OSPF",
-      "as_number": 3,
+      "as_number": 65000,
       "as_type": "provider",
-      "role": "P",
+      "customer_id": null,
+      "customer_color": null,
+      "role": "RR",
       "ebgp": false,
-      "loopback_ip": "10.255.2.3",
+      "loopback_ip": "10.255.0.3",
       "interfaces": [
         {
           "name": "GigabitEthernet2/0",
-          "ip": "172.16.2.6",
+          "ip": "172.16.0.6",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
         {
           "name": "GigabitEthernet3/0",
-          "ip": "172.16.2.9",
+          "ip": "172.16.0.9",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
         {
           "name": "GigabitEthernet1/0",
-          "ip": "172.16.2.22",
+          "ip": "172.16.0.22",
           "prefix": 30,
           "mask": "255.255.255.252"
         }
       ],
       "networks": [
-        "172.16.2.20/30",
-        "172.16.2.4/30",
-        "172.16.2.8/30"
+        "172.16.0.20/30",
+        "172.16.0.4/30",
+        "172.16.0.8/30"
       ]
     },
     {
       "name": "PE2",
       "protocol": "OSPF",
-      "as_number": 3,
+      "as_number": 65000,
       "as_type": "provider",
+      "customer_id": null,
+      "customer_color": null,
       "role": "PE",
       "ebgp": true,
-      "loopback_ip": "10.255.2.4",
+      "loopback_ip": "10.255.0.4",
       "interfaces": [
         {
           "name": "GigabitEthernet3/0",
-          "ip": "172.16.2.10",
+          "ip": "172.16.0.10",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
@@ -117,21 +132,30 @@
           "ip": "172.31.0.5",
           "prefix": 30,
           "mask": "255.255.255.252"
+        },
+        {
+          "name": "GigabitEthernet1/0",
+          "ip": "172.31.0.14",
+          "prefix": 30,
+          "mask": "255.255.255.252"
         }
       ],
       "networks": [
-        "172.16.2.8/30",
+        "172.16.0.8/30",
+        "172.31.0.12/30",
         "172.31.0.4/30"
       ]
     },
     {
       "name": "CE1",
-      "protocol": "OSPF",
-      "as_number": 1,
+      "protocol": "BGP",
+      "as_number": 65100,
       "as_type": "customer",
+      "customer_id": 1,
+      "customer_color": "#00ff00",
       "role": "CE",
       "ebgp": true,
-      "loopback_ip": "10.255.0.1",
+      "loopback_ip": "10.255.1.1",
       "interfaces": [
         {
           "name": "FastEthernet0/0",
@@ -146,12 +170,14 @@
     },
     {
       "name": "CE2",
-      "protocol": "OSPF",
-      "as_number": 2,
+      "protocol": "BGP",
+      "as_number": 65101,
       "as_type": "customer",
+      "customer_id": 2,
+      "customer_color": "#ff0000",
       "role": "CE",
       "ebgp": true,
-      "loopback_ip": "10.255.1.1",
+      "loopback_ip": "10.255.2.1",
       "interfaces": [
         {
           "name": "FastEthernet0/0",
@@ -165,57 +191,105 @@
       ]
     },
     {
-      "name": "RR1",
+      "name": "P3",
       "protocol": "OSPF",
-      "as_number": 3,
+      "as_number": 65000,
       "as_type": "provider",
+      "customer_id": null,
+      "customer_color": null,
       "role": "RR",
       "ebgp": false,
-      "loopback_ip": "10.255.2.5",
+      "loopback_ip": "10.255.0.5",
       "interfaces": [
         {
           "name": "FastEthernet0/0",
-          "ip": "172.16.2.13",
+          "ip": "172.16.0.13",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
         {
           "name": "GigabitEthernet3/0",
-          "ip": "172.16.2.17",
+          "ip": "172.16.0.17",
           "prefix": 30,
           "mask": "255.255.255.252"
         }
       ],
       "networks": [
-        "172.16.2.12/30",
-        "172.16.2.16/30"
+        "172.16.0.12/30",
+        "172.16.0.16/30"
       ]
     },
     {
-      "name": "RR2",
+      "name": "P4",
       "protocol": "OSPF",
-      "as_number": 3,
+      "as_number": 65000,
       "as_type": "provider",
-      "role": "RR",
+      "customer_id": null,
+      "customer_color": null,
+      "role": "P",
       "ebgp": false,
-      "loopback_ip": "10.255.2.6",
+      "loopback_ip": "10.255.0.6",
       "interfaces": [
         {
           "name": "FastEthernet0/0",
-          "ip": "172.16.2.14",
+          "ip": "172.16.0.14",
           "prefix": 30,
           "mask": "255.255.255.252"
         },
         {
           "name": "GigabitEthernet1/0",
-          "ip": "172.16.2.21",
+          "ip": "172.16.0.21",
           "prefix": 30,
           "mask": "255.255.255.252"
         }
       ],
       "networks": [
-        "172.16.2.12/30",
-        "172.16.2.20/30"
+        "172.16.0.12/30",
+        "172.16.0.20/30"
+      ]
+    },
+    {
+      "name": "CE3",
+      "protocol": "BGP",
+      "as_number": 65101,
+      "as_type": "customer",
+      "customer_id": 2,
+      "customer_color": "#ff0000",
+      "role": "CE",
+      "ebgp": true,
+      "loopback_ip": "10.255.2.2",
+      "interfaces": [
+        {
+          "name": "FastEthernet0/0",
+          "ip": "172.31.0.9",
+          "prefix": 30,
+          "mask": "255.255.255.252"
+        }
+      ],
+      "networks": [
+        "172.31.0.8/30"
+      ]
+    },
+    {
+      "name": "CE4",
+      "protocol": "BGP",
+      "as_number": 65100,
+      "as_type": "customer",
+      "customer_id": 1,
+      "customer_color": "#00ff00",
+      "role": "CE",
+      "ebgp": true,
+      "loopback_ip": "10.255.1.2",
+      "interfaces": [
+        {
+          "name": "FastEthernet0/0",
+          "ip": "172.31.0.13",
+          "prefix": 30,
+          "mask": "255.255.255.252"
+        }
+      ],
+      "networks": [
+        "172.31.0.12/30"
       ]
     }
   ],
@@ -251,22 +325,35 @@
       "b_iface": "FastEthernet0/0"
     },
     {
-      "a": "RR1",
+      "a": "P3",
       "a_iface": "FastEthernet0/0",
-      "b": "RR2",
+      "b": "P4",
       "b_iface": "FastEthernet0/0"
     },
     {
-      "a": "RR1",
+      "a": "P3",
       "a_iface": "GigabitEthernet3/0",
       "b": "P1",
       "b_iface": "GigabitEthernet3/0"
     },
     {
-      "a": "RR2",
+      "a": "P4",
       "a_iface": "GigabitEthernet1/0",
       "b": "P2",
       "b_iface": "GigabitEthernet1/0"
+    },
+    {
+      "a": "CE3",
+      "a_iface": "FastEthernet0/0",
+      "b": "PE1",
+      "b_iface": "GigabitEthernet2/0"
+    },
+    {
+      "a": "CE4",
+      "a_iface": "FastEthernet0/0",
+      "b": "PE2",
+      "b_iface": "GigabitEthernet1/0"
     }
-  ]
+  ],
+  "warnings": []
 }
