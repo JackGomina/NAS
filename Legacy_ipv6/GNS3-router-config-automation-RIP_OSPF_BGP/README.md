@@ -3,7 +3,7 @@
 Portfolio project developed by **Leno Renaud, Hector Ernoult, Théodore Bonnier, Jules Gruffaz**.
 
 This project automates Cisco c7200 router configuration inside a GNS3 topology using Python scripts and Jinja2 templates.  
-It provides a GUI workflow that helps generate and inject routing configurations ( / OSPF / BGP) into a complete lab architecture.
+It provides a GUI workflow that helps generate and inject routing configurations (OSPF / iBGP / eBGP / MPLS / VRF) into a complete lab architecture.
 
 ---
 
@@ -19,8 +19,8 @@ Build a reliable automation pipeline for multi-AS GNS3 labs, reducing manual rou
 - Automatic topology processing and configuration generation.
 - Templated router configs with Jinja2.
 - Automated config injection into router files.
-- Support for mixed routing designs (, OSPF, BGP).
-- Experimental Gao-Rexford community handling.
+- Support for MPLS L3VPN designs (OSPF core, LDP, vpnv4, VRF, PE-CE eBGP).
+- Automatic router role detection (PE, P, CE, RR) based on GNS3 rectangles.
 
 ### Tech Stack
 
@@ -55,11 +55,9 @@ utils.py                        # Utility helpers
 topology.json                   # Topology data source
 configs/                        # Generated router configurations
 get_topology/                   # Topology extraction logic
-gen_config_bgp_rip/             # BGP +  generation module
-gen_config_bgp_ospf/            # BGP + OSPF generation module
+gen_config_bgp_ospf/            # BGP + OSPF + MPLS generation module
 injection_cfgs/                 # Config injection module
 architecture_finale/            # GNS3 project files
-Documentation/                  # Additional technical docs
 assets/                         # README screenshots
 ```
 
@@ -79,7 +77,7 @@ The scripts rely on the repository structure, so keep the complete folder tree u
 
 ```bash
 git clone <your-repo-url>
-cd projet-gns
+cd GNS3-router-config-automation-RIP_OSPF_BGP
 ```
 
 ### 3) Install dependencies
@@ -94,9 +92,8 @@ pip install jinja2
 
 - Open your GNS3 project.
 - Draw background rectangles around each AS:
-	- **Red** rectangle for  domains
-	- **Green** rectangle for OSPF domains
-- Colors must be pure values for detection (example: red = RGB `255, 0, 0`).
+	- **Black strict (#000000)** rectangle for the Provider domain
+	- **Any other color** rectangle for Customer VPNs/VRFs. Two rectangles of the same color = same customer.
 
 ### 5) Run the application
 
@@ -118,8 +115,8 @@ Then:
 
 ## Known Limitations
 
-- Gao-Rexford communities support is experimental.
-- You can define OSPF metrics on links between  routers in the GUI, but this does not affect final configs.
+- All routers must be correctly placed inside their specific rectangles for the automatic role assignment (PE, P, CE, RR) to work properly.
+- The GUI assumes specific router names to identify the Route Reflector if automatic assignment is checked.
 
 ---
 
