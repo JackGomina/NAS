@@ -45,7 +45,7 @@
       "as_type": "provider",
       "customer_id": null,
       "customer_color": null,
-      "role": "RR",
+      "role": "P",
       "ebgp": false,
       "loopback_ip": "10.255.0.2",
       "interfaces": [
@@ -81,7 +81,7 @@
       "as_type": "provider",
       "customer_id": null,
       "customer_color": null,
-      "role": "RR",
+      "role": "P",
       "ebgp": false,
       "loopback_ip": "10.255.0.3",
       "interfaces": [
